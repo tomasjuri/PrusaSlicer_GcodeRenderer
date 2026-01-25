@@ -4,29 +4,30 @@
   "visible_features": {
     "travels": false,
     "wipes": false,
-    "retractions": true,
-    "unretractions": true,
-    "seams": true,
-    "tool_changes": true,
-    "color_changes": true,
-    "pause_prints": true,
-    "custom_gcodes": true
+    "retractions": false,
+    "unretractions": false,
+    "seams": false,
+    "tool_changes": false,
+    "color_changes": false,
+    "pause_prints": false,
+    "custom_gcodes": false
   },
   "extrusion_roles": {
-    "Perimeter": {"visible": true, "color": "#FFA500"},
-    "ExternalPerimeter": {"visible": true, "color": "#FFFF00"},
-    "OverhangPerimeter": {"visible": true, "color": "#0000FF"},
-    "InternalInfill": {"visible": true, "color": "#B22222"},
-    "SolidInfill": {"visible": true, "color": "#8B4513"},
-    "TopSolidInfill": {"visible": true, "color": "#FF0000"},
-    "Ironing": {"visible": true, "color": "#FFFFFF"},
-    "BridgeInfill": {"visible": true, "color": "#00FFFF"},
+    "None": {"visible": true, "color": "#E6B3B3"},
+    "Perimeter": {"visible": true, "color": "#FFE64D"},
+    "ExternalPerimeter": {"visible": true, "color": "#FF7D38"},
+    "OverhangPerimeter": {"visible": true, "color": "#1F1FFF"},
+    "InternalInfill": {"visible": true, "color": "#B03029"},
+    "SolidInfill": {"visible": true, "color": "#9654CC"},
+    "TopSolidInfill": {"visible": true, "color": "#F04040"},
+    "Ironing": {"visible": true, "color": "#FF8C69"},
+    "BridgeInfill": {"visible": true, "color": "#4D80BA"},
     "GapFill": {"visible": true, "color": "#FFFFFF"},
-    "Skirt": {"visible": true, "color": "#00FF00"},
-    "SupportMaterial": {"visible": true, "color": "#008000"},
-    "SupportMaterialInterface": {"visible": true, "color": "#008080"},
-    "WipeTower": {"visible": true, "color": "#808080"},
-    "Custom": {"visible": true, "color": "#FF00FF"}
+    "Skirt": {"visible": true, "color": "#00876E"},
+    "SupportMaterial": {"visible": true, "color": "#00FF00"},
+    "SupportMaterialInterface": {"visible": true, "color": "#008000"},
+    "WipeTower": {"visible": true, "color": "#B3E3AB"},
+    "Custom": {"visible": true, "color": "#5ED194"}
   },
   "tool_colors": [
     "#FF8000",
@@ -36,8 +37,8 @@
     "#00FFFF"
   ],
   "output": {
-    "width": 1920,
-    "height": 1080,
-    "background_color": "#FFFFFF"
+    "width": 3840,
+    "height": 2160,
+    "background_color": "#1A1A1A"
   }
 }

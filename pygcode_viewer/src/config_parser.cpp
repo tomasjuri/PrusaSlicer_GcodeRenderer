@@ -23,16 +23,16 @@ void ViewConfig::init_defaults() {
     layer_max = 0;
     has_layer_range = false;
     
-    // Default option visibility
+    // Default option visibility - only extrusions visible
     option_visibility[libvgcode::EOptionType::Travels] = false;
     option_visibility[libvgcode::EOptionType::Wipes] = false;
-    option_visibility[libvgcode::EOptionType::Retractions] = true;
-    option_visibility[libvgcode::EOptionType::Unretractions] = true;
-    option_visibility[libvgcode::EOptionType::Seams] = true;
-    option_visibility[libvgcode::EOptionType::ToolChanges] = true;
-    option_visibility[libvgcode::EOptionType::ColorChanges] = true;
-    option_visibility[libvgcode::EOptionType::PausePrints] = true;
-    option_visibility[libvgcode::EOptionType::CustomGCodes] = true;
+    option_visibility[libvgcode::EOptionType::Retractions] = false;
+    option_visibility[libvgcode::EOptionType::Unretractions] = false;
+    option_visibility[libvgcode::EOptionType::Seams] = false;
+    option_visibility[libvgcode::EOptionType::ToolChanges] = false;
+    option_visibility[libvgcode::EOptionType::ColorChanges] = false;
+    option_visibility[libvgcode::EOptionType::PausePrints] = false;
+    option_visibility[libvgcode::EOptionType::CustomGCodes] = false;
     
     // Default role visibility (all visible)
     for (int i = 0; i < static_cast<int>(libvgcode::EGCodeExtrusionRole::COUNT); ++i) {
@@ -52,8 +52,8 @@ void ViewConfig::init_defaults() {
     // Output defaults
     width = 1920;
     height = 1080;
-    // PrusaSlicer-like gray background (average of dark 0.478 and light 0.753)
-    background_color = {0.616f, 0.616f, 0.616f, 1.0f};
+    // Dark gray background (almost black) - configurable
+    background_color = {0.1f, 0.1f, 0.1f, 1.0f};
     
     // Set exact PrusaSlicer default role colors
     role_colors[libvgcode::EGCodeExtrusionRole::None]                     = {230, 179, 179};

@@ -63,17 +63,17 @@ class ViewConfig:
     # Layer range [min, max], None means full range
     layer_range: Optional[Tuple[int, Optional[int]]] = None
     
-    # Feature visibility
+    # Feature visibility - only extrusions visible by default
     visible_features: Dict[str, bool] = field(default_factory=lambda: {
         "travels": False,
         "wipes": False,
-        "retractions": True,
-        "unretractions": True,
-        "seams": True,
-        "tool_changes": True,
-        "color_changes": True,
-        "pause_prints": True,
-        "custom_gcodes": True,
+        "retractions": False,
+        "unretractions": False,
+        "seams": False,
+        "tool_changes": False,
+        "color_changes": False,
+        "pause_prints": False,
+        "custom_gcodes": False,
     })
     
     # Extrusion role visibility and colors (exact PrusaSlicer defaults from libvgcode)
@@ -103,7 +103,7 @@ class ViewConfig:
     # Output settings
     width: int = 1920
     height: int = 1080
-    background_color: str = "#FFFFFF"
+    background_color: str = "#1A1A1A"  # Dark gray (almost black)
     
     def to_dict(self) -> dict:
         return {

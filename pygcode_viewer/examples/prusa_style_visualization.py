@@ -53,8 +53,8 @@ def main():
     config.visible_features["travels"] = False
     config.width = 3840
     config.height = 2160
-    # PrusaSlicer gray background
-    config.background_color = "#9D9D9D"
+    # Dark gray background (almost black) - default
+    config.background_color = "#1A1A1A"
     viewer.set_config(config)
     
     output_dir = os.path.dirname(os.path.abspath(__file__))
