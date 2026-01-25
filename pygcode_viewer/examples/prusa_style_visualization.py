@@ -68,16 +68,17 @@ def main():
     output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs")
     os.makedirs(output_dir, exist_ok=True)
     
-    # Camera: slightly angled top-down view (avoids gimbal lock issues)
-    # Position camera above and slightly offset, looking at model center
-    camera_distance = model_size * 1.5
-    camera_height = bbox[5] + camera_distance * 0.8  # Above model
-    camera_offset = camera_distance * 0.3  # Slight offset for angle
+    # Camera: top-down view at bed center, looking straight down
+    # Bed center for Prusa MK4: (125, 105)
+    bed_center_x = 125.0
+    bed_center_y = 105.0
+    camera_height = 100.0  # 10cm above bed
+    epsilon = 0.01  # Tiny offset in Y to avoid singularity
     
     viewer.set_camera(
-        pos=(model_center_x + camera_offset, model_center_y - camera_offset, camera_height),
-        target=(model_center_x, model_center_y, model_center_z),
-        up=(0.0, 0.0, 1.0),  # Z-axis as up
+        pos=(bed_center_x, bed_center_y - epsilon, camera_height),
+        target=(bed_center_x, bed_center_y, 0.0),
+        up=(0.0, 1.0, 0.0),  # Y-axis as up in image
         fov=45.0
     )
     

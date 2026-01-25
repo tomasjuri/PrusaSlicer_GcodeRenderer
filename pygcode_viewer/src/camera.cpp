@@ -140,10 +140,39 @@ libvgcode::Mat4x4 identity() {
 }
 
 libvgcode::Mat4x4 look_at(const Vec3f& eye, const Vec3f& target, const Vec3f& up) {
-    // Calculate basis vectors
-    Vec3f f = (target - eye).normalized();  // Forward
-    Vec3f r = f.cross(up).normalized();     // Right
-    Vec3f u = r.cross(f);                   // Up (recalculated)
+    // Calculate forward direction
+    Vec3f f = (target - eye).normalized();
+    
+    // Handle gimbal lock: when forward is nearly parallel to the up vector,
+    // the cross product becomes degenerate. Choose an alternative up vector.
+    Vec3f working_up = up;
+    float parallel_check = std::abs(f.dot(up));
+    
+    if (parallel_check > 0.99f) {
+        // Forward and up are nearly parallel - use an alternative up vector
+        // If looking along Y, use Z; if looking along Z, use Y; otherwise use Z
+        if (std::abs(f.z) > 0.9f) {
+            // Looking up/down along Z - use Y as up
+            working_up = Vec3f(0.0f, 1.0f, 0.0f);
+        } else if (std::abs(f.y) > 0.9f) {
+            // Looking along Y - use Z as up
+            working_up = Vec3f(0.0f, 0.0f, 1.0f);
+        } else {
+            // Looking along X - use Z as up
+            working_up = Vec3f(0.0f, 0.0f, 1.0f);
+        }
+    }
+    
+    // Calculate right and up vectors
+    Vec3f r = f.cross(working_up);
+    float r_len = r.length();
+    if (r_len < 0.001f) {
+        // Still degenerate - force a valid right vector
+        r = Vec3f(1.0f, 0.0f, 0.0f);
+    } else {
+        r = r * (1.0f / r_len);
+    }
+    Vec3f u = r.cross(f);  // Up (recalculated, always orthogonal)
     
     // Create view matrix (column-major order)
     // This is the inverse of the camera transform
