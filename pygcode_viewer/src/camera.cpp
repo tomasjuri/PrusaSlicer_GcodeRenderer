@@ -53,6 +53,20 @@ void Camera::set_clip_planes(float near_plane, float far_plane) {
     m_params.far_plane = far_plane;
 }
 
+void Camera::set_intrinsics(const CameraIntrinsics& intrinsics) {
+    m_params.intrinsics = intrinsics;
+    m_params.use_intrinsics = intrinsics.is_valid;
+}
+
+void Camera::set_intrinsics(float fx, float fy, float cx, float cy, int width, int height) {
+    m_params.intrinsics = CameraIntrinsics(fx, fy, cx, cy, width, height);
+    m_params.use_intrinsics = true;
+}
+
+void Camera::set_use_intrinsics(bool use) {
+    m_params.use_intrinsics = use && m_params.intrinsics.is_valid;
+}
+
 libvgcode::Mat4x4 Camera::get_view_matrix() const {
     return MatrixUtils::look_at(m_params.position, m_params.target, m_params.up);
 }
@@ -64,6 +78,18 @@ libvgcode::Mat4x4 Camera::get_projection_matrix(float aspect_ratio) const {
 }
 
 libvgcode::Mat4x4 Camera::get_projection_matrix(int width, int height) const {
+    // If intrinsics are enabled and valid, use them
+    if (m_params.use_intrinsics && m_params.intrinsics.is_valid) {
+        const auto& intr = m_params.intrinsics;
+        return MatrixUtils::perspective_from_intrinsics(
+            intr.fx, intr.fy, intr.cx, intr.cy,
+            width, height,
+            intr.image_width, intr.image_height,
+            m_params.near_plane, m_params.far_plane
+        );
+    }
+    
+    // Otherwise use standard FOV-based perspective
     float aspect = static_cast<float>(width) / static_cast<float>(height);
     return get_projection_matrix(aspect);
 }
@@ -160,6 +186,70 @@ libvgcode::Mat4x4 perspective(float fov_radians, float aspect, float near_plane,
     m[10] = -(far_plane + near_plane) / (far_plane - near_plane);
     m[11] = -1.0f;
     m[14] = -(2.0f * far_plane * near_plane) / (far_plane - near_plane);
+    
+    return m;
+}
+
+libvgcode::Mat4x4 perspective_from_intrinsics(
+    float fx, float fy, float cx, float cy,
+    int width, int height,
+    int calib_width, int calib_height,
+    float near_plane, float far_plane
+) {
+    // Scale intrinsics if render size differs from calibration size
+    float scale_x = static_cast<float>(width) / static_cast<float>(calib_width);
+    float scale_y = static_cast<float>(height) / static_cast<float>(calib_height);
+    
+    float fx_scaled = fx * scale_x;
+    float fy_scaled = fy * scale_y;
+    float cx_scaled = cx * scale_x;
+    float cy_scaled = cy * scale_y;
+    
+    float w = static_cast<float>(width);
+    float h = static_cast<float>(height);
+    float n = near_plane;
+    float f = far_plane;
+    
+    // OpenGL projection matrix from camera intrinsics
+    // This maps from camera coordinates to NDC (Normalized Device Coordinates)
+    // 
+    // The standard pinhole camera model projects 3D point (X, Y, Z) to 2D:
+    //   x = fx * X/Z + cx
+    //   y = fy * Y/Z + cy
+    //
+    // OpenGL NDC maps pixel coordinates to [-1, 1]:
+    //   ndc_x = 2*x/width - 1 = 2*fx*X/(Z*width) + (2*cx/width - 1)
+    //   ndc_y = 1 - 2*y/height = -2*fy*Y/(Z*height) + (1 - 2*cy/height)
+    //
+    // Note: OpenGL has Y pointing up, while image coordinates have Y pointing down
+    
+    libvgcode::Mat4x4 m = {};  // Zero initialize
+    
+    // Column 0
+    m[0] = 2.0f * fx_scaled / w;
+    m[1] = 0.0f;
+    m[2] = 0.0f;
+    m[3] = 0.0f;
+    
+    // Column 1
+    m[4] = 0.0f;
+    m[5] = 2.0f * fy_scaled / h;  // Positive because we flip Y in column 2
+    m[6] = 0.0f;
+    m[7] = 0.0f;
+    
+    // Column 2
+    // Principal point offset and depth mapping
+    // The signs account for OpenGL's coordinate system
+    m[8] = (w - 2.0f * cx_scaled) / w;   // Maps cx to center
+    m[9] = (2.0f * cy_scaled - h) / h;   // Maps cy to center, flips Y
+    m[10] = -(f + n) / (f - n);          // Depth mapping
+    m[11] = -1.0f;                        // Perspective divide
+    
+    // Column 3
+    m[12] = 0.0f;
+    m[13] = 0.0f;
+    m[14] = -2.0f * f * n / (f - n);     // Depth offset
+    m[15] = 0.0f;
     
     return m;
 }

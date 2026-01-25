@@ -14,6 +14,7 @@
 #include "gcode_parser.hpp"
 #include "camera.hpp"
 #include "config_parser.hpp"
+#include "bed_renderer.hpp"
 
 namespace libvgcode {
 class Viewer;
@@ -58,6 +59,12 @@ public:
     /// Apply configuration
     void apply_config(const std::string& config_json);
     
+    /// Set bed configuration
+    void set_bed_config(const BedConfig& config);
+    
+    /// Get bed configuration
+    const BedConfig& get_bed_config() const { return m_bed_config; }
+    
     /// Render to PNG file
     void render_to_file(
         const std::string& output_path,
@@ -77,6 +84,17 @@ public:
         const std::string& config_json
     );
     
+    /// Render with camera intrinsics support
+    void render_to_file(
+        const std::string& output_path,
+        int width,
+        int height,
+        float cam_pos_x, float cam_pos_y, float cam_pos_z,
+        float cam_target_x, float cam_target_y, float cam_target_z,
+        const CameraIntrinsics& intrinsics,
+        const std::string& config_json
+    );
+    
 private:
     void ensure_context();
     void init_viewer();
@@ -88,6 +106,8 @@ private:
     GCodeParseResult m_parse_result;
     Camera m_camera;
     ViewConfig m_config;
+    BedConfig m_bed_config;
+    std::unique_ptr<BedRenderer> m_bed_renderer;
     
     bool m_loaded = false;
     bool m_viewer_initialized = false;

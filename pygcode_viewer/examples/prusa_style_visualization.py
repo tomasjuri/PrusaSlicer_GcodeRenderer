@@ -1,184 +1,98 @@
 #!/usr/bin/env python3
 """
-PrusaSlicer-style GCODE visualization with layer cuts.
-
-This script creates visualizations that match PrusaSlicer's appearance:
-- Exact color scheme from PrusaSlicer
-- Multiple layer cut views
-- Various camera angles
+Simple GCODE visualization with top-down camera view and layer cuts.
+Uses camera intrinsic parameters for realistic projection.
 """
 
 import sys
 import os
 
-# Add parent directory to path for local development
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygcode_viewer
 
+
 def main():
-    # Path to GCODE file
-    gcode_path = "/Users/tomasjurica/projects/PrusaSlicer/Shape-Box_0.4n_0.2mm_PLA_MK4IS_20m.gcode"
+    # Paths
+    gcode_path = "/Users/tomasjurica/projects/PrusaSlicer/3dbenchy_0.4n_0.2mm_PETG_MK4IS_45m.gcode"
+    intrinsics_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "camera_intrinsic.json")
     
     if not os.path.exists(gcode_path):
         print(f"Error: GCODE file not found: {gcode_path}")
         return 1
     
+    if not os.path.exists(intrinsics_path):
+        print(f"Error: Camera intrinsics not found: {intrinsics_path}")
+        return 1
+    
     print(f"Loading: {gcode_path}")
     
-    # Create viewer
+    # Create viewer and load GCODE
     viewer = pygcode_viewer.GCodeViewer()
     viewer.load(gcode_path)
     
-    # Get model info
     layer_count = viewer.get_layer_count()
-    bbox = viewer.get_bounding_box()
-    
     print(f"Layers: {layer_count}")
-    print(f"Bounding box: X[{bbox[0]:.1f}, {bbox[3]:.1f}] Y[{bbox[1]:.1f}, {bbox[4]:.1f}] Z[{bbox[2]:.1f}, {bbox[5]:.1f}]")
     
-    # Calculate camera positions
-    center_x = (bbox[0] + bbox[3]) / 2
-    center_y = (bbox[1] + bbox[4]) / 2
-    center_z = (bbox[2] + bbox[5]) / 2
-    size_x = bbox[3] - bbox[0]
-    size_y = bbox[4] - bbox[1]
-    size_z = bbox[5] - bbox[2]
-    max_xy = max(size_x, size_y)
-    distance = max_xy * 1.5
+    # Load camera intrinsics
+    intrinsics = pygcode_viewer.CameraIntrinsics.from_json_file(intrinsics_path)
+    print(f"Intrinsics: fx={intrinsics.fx:.1f}, fy={intrinsics.fy:.1f}, cx={intrinsics.cx:.1f}, cy={intrinsics.cy:.1f}")
+    print(f"Image size: {intrinsics.image_width}x{intrinsics.image_height}")
     
-    # Configure with PrusaSlicer colors - 4K resolution
+    viewer.set_intrinsics(intrinsics)
+    
+    # Configure visualization (use intrinsics image size)
     config = pygcode_viewer.ViewConfig()
     config.view_type = "FeatureType"
     config.visible_features["travels"] = False
-    config.width = 3840
-    config.height = 2160
-    # Dark gray background (almost black) - default
+    config.width = intrinsics.image_width
+    config.height = intrinsics.image_height
     config.background_color = "#1A1A1A"
     viewer.set_config(config)
     
-    output_dir = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.dirname(output_dir)  # Go up to pygcode_viewer dir
+    # Get model bounding box to center camera on the model
+    bbox = viewer.get_bounding_box()
+    model_center_x = (bbox[0] + bbox[3]) / 2
+    model_center_y = (bbox[1] + bbox[4]) / 2
+    model_center_z = (bbox[2] + bbox[5]) / 2
+    model_height = bbox[5] - bbox[2]
+    model_size = max(bbox[3] - bbox[0], bbox[4] - bbox[1])
     
-    # =========================================================================
-    # 1. Full model - Isometric view (front-right-top)
-    # =========================================================================
+    print(f"Model center: ({model_center_x:.1f}, {model_center_y:.1f}, {model_center_z:.1f})")
+    print(f"Model size: {model_size:.1f}mm, height: {model_height:.1f}mm")
+    
+    # Bed config (Prusa MK4: 250x210mm)
+    viewer.set_bed(size=(250, 210), show_outline=True, outline_color="#4D4D4D")
+    
+    # Output directory
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Camera: slightly angled top-down view (avoids gimbal lock issues)
+    # Position camera above and slightly offset, looking at model center
+    camera_distance = model_size * 1.5
+    camera_height = bbox[5] + camera_distance * 0.8  # Above model
+    camera_offset = camera_distance * 0.3  # Slight offset for angle
+    
     viewer.set_camera(
-        pos=(center_x + distance * 0.8, center_y - distance * 0.8, center_z + distance * 0.6),
-        target=(center_x, center_y, center_z),
-        fov=45.0
-    )
-    viewer.set_layer_range(0, layer_count - 1)  # All layers
-    
-    output_path = os.path.join(output_dir, "prusa_full_isometric.png")
-    print(f"\nRendering full model (isometric): {output_path}")
-    viewer.render_to_file(output_path)
-    
-    # =========================================================================
-    # 2. Top view - Camera directly above, looking down
-    # =========================================================================
-    # For top view, position camera above and use Y as up vector
-    top_distance = max_xy * 1.2
-    viewer.set_camera(
-        pos=(center_x, center_y, bbox[5] + top_distance),
-        target=(center_x, center_y, center_z),
-        up=(0.0, 1.0, 0.0),  # Y-axis as up when looking down Z
-        fov=45.0
-    )
-    
-    output_path = os.path.join(output_dir, "prusa_full_top.png")
-    print(f"Rendering full model (top view): {output_path}")
-    viewer.render_to_file(output_path)
-    
-    # =========================================================================
-    # 3. Front view
-    # =========================================================================
-    front_distance = max_xy * 1.5
-    viewer.set_camera(
-        pos=(center_x, bbox[1] - front_distance, center_z),
-        target=(center_x, center_y, center_z),
+        pos=(model_center_x + camera_offset, model_center_y - camera_offset, camera_height),
+        target=(model_center_x, model_center_y, model_center_z),
         up=(0.0, 0.0, 1.0),  # Z-axis as up
         fov=45.0
     )
     
-    output_path = os.path.join(output_dir, "prusa_full_front.png")
-    print(f"Rendering full model (front view): {output_path}")
-    viewer.render_to_file(output_path)
-    
-    # =========================================================================
-    # 4. Side view
-    # =========================================================================
-    viewer.set_camera(
-        pos=(bbox[3] + front_distance, center_y, center_z),
-        target=(center_x, center_y, center_z),
-        up=(0.0, 0.0, 1.0),  # Z-axis as up
-        fov=45.0
-    )
-    
-    output_path = os.path.join(output_dir, "prusa_full_side.png")
-    print(f"Rendering full model (side view): {output_path}")
-    viewer.render_to_file(output_path)
-    
-    # =========================================================================
-    # 5. Layer cuts at various heights
-    # =========================================================================
-    # Reset camera to isometric
-    viewer.set_camera(
-        pos=(center_x + distance * 0.8, center_y - distance * 0.8, center_z + distance * 0.6),
-        target=(center_x, center_y, center_z),
-        fov=45.0
-    )
-    
-    # Layer cuts at 25%, 50%, 75%, and 100%
-    cut_percentages = [25, 50, 75, 100]
-    
-    for pct in cut_percentages:
+    # Render layer cuts at 25%, 50%, 75%, 100%
+    for pct in [25, 50, 75, 100]:
         cut_layer = int((pct / 100.0) * (layer_count - 1))
         viewer.set_layer_range(0, cut_layer)
         
-        output_path = os.path.join(output_dir, f"prusa_layer_{pct}pct.png")
-        print(f"Rendering layer cut at {pct}% (layer {cut_layer}/{layer_count-1}): {output_path}")
+        output_path = os.path.join(output_dir, f"layer_{pct}pct.png")
+        print(f"Rendering {pct}% (layer {cut_layer}): {output_path}")
         viewer.render_to_file(output_path)
     
-    # =========================================================================
-    # 6. Individual layers (first, middle, last)
-    # =========================================================================
-    layer_indices = [
-        (1, "first"),
-        (layer_count // 2, "middle"),
-        (layer_count - 1, "last")
-    ]
-    
-    for layer_idx, name in layer_indices:
-        viewer.set_layer_range(layer_idx, layer_idx)
-        
-        output_path = os.path.join(output_dir, f"prusa_single_layer_{name}.png")
-        print(f"Rendering single layer ({name}, layer {layer_idx}): {output_path}")
-        viewer.render_to_file(output_path)
-    
-    # =========================================================================
-    # 7. Speed visualization
-    # =========================================================================
-    viewer.set_layer_range(0, layer_count - 1)  # Reset to all layers
-    viewer.set_view_type("Speed")
-    
-    output_path = os.path.join(output_dir, "prusa_speed_view.png")
-    print(f"Rendering speed view: {output_path}")
-    viewer.render_to_file(output_path)
-    
-    # =========================================================================
-    # 8. Height visualization
-    # =========================================================================
-    viewer.set_view_type("Height")
-    
-    output_path = os.path.join(output_dir, "prusa_height_view.png")
-    print(f"Rendering height view: {output_path}")
-    viewer.render_to_file(output_path)
-    
-    print(f"\nDone! Generated {8 + len(cut_percentages) + len(layer_indices)} visualizations.")
-    print(f"Output directory: {output_dir}")
-    
+    print(f"\nDone! Output: {output_dir}")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

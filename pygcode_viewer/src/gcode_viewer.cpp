@@ -14,6 +14,11 @@ namespace pygcode {
 
 GCodeViewerCore::GCodeViewerCore() {
     m_config.init_defaults();
+    // Default bed config for Prusa MK4
+    m_bed_config.size_x = 250.0f;
+    m_bed_config.size_y = 210.0f;
+    m_bed_config.show_outline = true;
+    m_bed_config.show_grid = false;
 }
 
 GCodeViewerCore::~GCodeViewerCore() {
@@ -22,6 +27,7 @@ GCodeViewerCore::~GCodeViewerCore() {
         m_viewer->shutdown();
     }
     m_viewer.reset();
+    m_bed_renderer.reset();
     m_framebuffer.reset();
     if (m_context) {
         m_context->release();
@@ -45,7 +51,20 @@ void GCodeViewerCore::init_viewer() {
         
         m_viewer = std::make_unique<libvgcode::Viewer>();
         m_viewer->init(m_context->get_version_string());
+        
+        // Initialize bed renderer
+        m_bed_renderer = std::make_unique<BedRenderer>();
+        m_bed_renderer->init();
+        m_bed_renderer->set_config(m_bed_config);
+        
         m_viewer_initialized = true;
+    }
+}
+
+void GCodeViewerCore::set_bed_config(const BedConfig& config) {
+    m_bed_config = config;
+    if (m_bed_renderer) {
+        m_bed_renderer->set_config(config);
     }
 }
 
@@ -174,6 +193,23 @@ void GCodeViewerCore::render_to_file(
     float cam_target_x, float cam_target_y, float cam_target_z,
     const std::string& config_json
 ) {
+    // Call the version with empty intrinsics
+    CameraIntrinsics empty_intrinsics;
+    render_to_file(output_path, width, height,
+                   cam_pos_x, cam_pos_y, cam_pos_z,
+                   cam_target_x, cam_target_y, cam_target_z,
+                   empty_intrinsics, config_json);
+}
+
+void GCodeViewerCore::render_to_file(
+    const std::string& output_path,
+    int width,
+    int height,
+    float cam_pos_x, float cam_pos_y, float cam_pos_z,
+    float cam_target_x, float cam_target_y, float cam_target_z,
+    const CameraIntrinsics& intrinsics,
+    const std::string& config_json
+) {
     if (!m_loaded) {
         throw std::runtime_error("No GCODE loaded. Call load() first.");
     }
@@ -191,6 +227,13 @@ void GCodeViewerCore::render_to_file(
     // Set up camera
     m_camera.set_position(cam_pos_x, cam_pos_y, cam_pos_z);
     m_camera.set_target(cam_target_x, cam_target_y, cam_target_z);
+    
+    // Apply intrinsics if valid
+    if (intrinsics.is_valid) {
+        m_camera.set_intrinsics(intrinsics);
+    } else {
+        m_camera.set_use_intrinsics(false);
+    }
     
     // Use config dimensions if not specified
     if (width <= 0) width = m_config.width;
@@ -218,6 +261,11 @@ void GCodeViewerCore::render_to_file(
         output_path,
         m_config.background_color,
         [this, &view_matrix, &projection_matrix]() {
+            // Render bed first (under the model)
+            if (m_bed_renderer && m_bed_config.show_outline) {
+                m_bed_renderer->render(view_matrix.data(), projection_matrix.data());
+            }
+            // Render the GCODE
             m_viewer->render(view_matrix, projection_matrix);
         }
     );

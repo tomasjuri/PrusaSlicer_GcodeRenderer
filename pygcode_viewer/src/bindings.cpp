@@ -9,6 +9,7 @@
 #include "gcode_viewer.hpp"
 #include "camera.hpp"
 #include "config_parser.hpp"
+#include "bed_renderer.hpp"
 
 #include <sstream>
 
@@ -83,6 +84,21 @@ std::string dict_to_json(const py::dict& d) {
 PYBIND11_MODULE(_pygcode_viewer, m) {
     m.doc() = "Python bindings for PrusaSlicer GCode visualization";
     
+    // BedConfig struct
+    py::class_<pygcode::BedConfig>(m, "BedConfig")
+        .def(py::init<>())
+        .def_readwrite("size_x", &pygcode::BedConfig::size_x)
+        .def_readwrite("size_y", &pygcode::BedConfig::size_y)
+        .def_readwrite("origin_x", &pygcode::BedConfig::origin_x)
+        .def_readwrite("origin_y", &pygcode::BedConfig::origin_y)
+        .def_readwrite("outline_color", &pygcode::BedConfig::outline_color)
+        .def_readwrite("grid_color", &pygcode::BedConfig::grid_color)
+        .def_readwrite("show_outline", &pygcode::BedConfig::show_outline)
+        .def_readwrite("show_grid", &pygcode::BedConfig::show_grid)
+        .def_readwrite("grid_spacing", &pygcode::BedConfig::grid_spacing)
+        .def_readwrite("line_width", &pygcode::BedConfig::line_width)
+        .def_readwrite("z_position", &pygcode::BedConfig::z_position);
+    
     // GCodeViewerCore class
     py::class_<pygcode::GCodeViewerCore>(m, "GCodeViewerCore")
         .def(py::init<>())
@@ -115,6 +131,14 @@ PYBIND11_MODULE(_pygcode_viewer, m) {
              py::arg("config_json"),
              "Apply JSON configuration")
         
+        .def("set_bed_config", &pygcode::GCodeViewerCore::set_bed_config,
+             py::arg("config"),
+             "Set bed configuration")
+        
+        .def("get_bed_config", &pygcode::GCodeViewerCore::get_bed_config,
+             py::return_value_policy::reference,
+             "Get bed configuration")
+        
         .def("render_to_file",
              [](pygcode::GCodeViewerCore& self,
                 const std::string& output_path,
@@ -145,6 +169,50 @@ PYBIND11_MODULE(_pygcode_viewer, m) {
                      }
                  }
                  
+                 // Extract optional camera intrinsics
+                 pygcode::CameraIntrinsics intrinsics;
+                 if (camera_dict.contains("intrinsics")) {
+                     py::dict intr = camera_dict["intrinsics"].cast<py::dict>();
+                     
+                     // Check for camera_matrix (3x3 array format from OpenCV calibration)
+                     if (intr.contains("camera_matrix")) {
+                         py::sequence matrix = intr["camera_matrix"].cast<py::sequence>();
+                         if (matrix.size() >= 3) {
+                             py::sequence row0 = matrix[0].cast<py::sequence>();
+                             py::sequence row1 = matrix[1].cast<py::sequence>();
+                             
+                             intrinsics.fx = row0[0].cast<float>();
+                             intrinsics.cx = row0[2].cast<float>();
+                             intrinsics.fy = row1[1].cast<float>();
+                             intrinsics.cy = row1[2].cast<float>();
+                             intrinsics.is_valid = true;
+                         }
+                     }
+                     // Or individual fx, fy, cx, cy values
+                     else {
+                         if (intr.contains("fx")) intrinsics.fx = intr["fx"].cast<float>();
+                         if (intr.contains("fy")) intrinsics.fy = intr["fy"].cast<float>();
+                         if (intr.contains("cx")) intrinsics.cx = intr["cx"].cast<float>();
+                         if (intr.contains("cy")) intrinsics.cy = intr["cy"].cast<float>();
+                         if (intrinsics.fx > 0 && intrinsics.fy > 0) {
+                             intrinsics.is_valid = true;
+                         }
+                     }
+                     
+                     // Image size from intrinsics
+                     if (intr.contains("image_size")) {
+                         py::sequence size = intr["image_size"].cast<py::sequence>();
+                         if (size.size() >= 2) {
+                             intrinsics.image_width = size[0].cast<int>();
+                             intrinsics.image_height = size[1].cast<int>();
+                         }
+                     } else {
+                         // Default to render size if not specified
+                         intrinsics.image_width = width;
+                         intrinsics.image_height = height;
+                     }
+                 }
+                 
                  // Convert config to JSON string
                  std::string config_json;
                  if (py::isinstance<py::dict>(config)) {
@@ -156,6 +224,7 @@ PYBIND11_MODULE(_pygcode_viewer, m) {
                  self.render_to_file(output_path, width, height,
                                      pos_x, pos_y, pos_z,
                                      target_x, target_y, target_z,
+                                     intrinsics,
                                      config_json);
              },
              py::arg("output_path"),
@@ -163,7 +232,7 @@ PYBIND11_MODULE(_pygcode_viewer, m) {
              py::arg("height"),
              py::arg("camera"),
              py::arg("config"),
-             "Render GCODE to a PNG file")
+             "Render GCODE to a PNG file. Camera dict can include 'intrinsics' with camera_matrix or fx/fy/cx/cy values.")
         ;
     
     // Version info

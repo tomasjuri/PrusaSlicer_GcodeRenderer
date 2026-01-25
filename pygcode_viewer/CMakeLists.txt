@@ -59,6 +59,7 @@ set(PYGCODE_SOURCES
     src/config_parser.cpp
     src/gcode_parser.cpp
     src/gcode_viewer.cpp
+    src/bed_renderer.cpp
 )
 
 set(PYGCODE_HEADERS
@@ -68,6 +69,7 @@ set(PYGCODE_HEADERS
     src/config_parser.hpp
     src/gcode_parser.hpp
     src/gcode_viewer.hpp
+    src/bed_renderer.hpp
 )
 
 add_library(pygcode_core STATIC ${PYGCODE_SOURCES} ${PYGCODE_HEADERS})

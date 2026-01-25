@@ -1,6 +1,15 @@
 {
   "view_type": "FeatureType",
   "layer_range": [0, null],
+  "bed": {
+    "show": true,
+    "color": "#4D4D4D",
+    "size_x": 250,
+    "size_y": 210,
+    "show_grid": true,
+    "grid_color": "#333333",
+    "grid_spacing": 10
+  },
   "visible_features": {
     "travels": false,
     "wipes": false,
