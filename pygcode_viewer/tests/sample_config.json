@@ -1,0 +1,43 @@
+{
+  "view_type": "FeatureType",
+  "layer_range": [0, null],
+  "visible_features": {
+    "travels": false,
+    "wipes": false,
+    "retractions": true,
+    "unretractions": true,
+    "seams": true,
+    "tool_changes": true,
+    "color_changes": true,
+    "pause_prints": true,
+    "custom_gcodes": true
+  },
+  "extrusion_roles": {
+    "Perimeter": {"visible": true, "color": "#FFA500"},
+    "ExternalPerimeter": {"visible": true, "color": "#FFFF00"},
+    "OverhangPerimeter": {"visible": true, "color": "#0000FF"},
+    "InternalInfill": {"visible": true, "color": "#B22222"},
+    "SolidInfill": {"visible": true, "color": "#8B4513"},
+    "TopSolidInfill": {"visible": true, "color": "#FF0000"},
+    "Ironing": {"visible": true, "color": "#FFFFFF"},
+    "BridgeInfill": {"visible": true, "color": "#00FFFF"},
+    "GapFill": {"visible": true, "color": "#FFFFFF"},
+    "Skirt": {"visible": true, "color": "#00FF00"},
+    "SupportMaterial": {"visible": true, "color": "#008000"},
+    "SupportMaterialInterface": {"visible": true, "color": "#008080"},
+    "WipeTower": {"visible": true, "color": "#808080"},
+    "Custom": {"visible": true, "color": "#FF00FF"}
+  },
+  "tool_colors": [
+    "#FF8000",
+    "#00FF00",
+    "#0000FF",
+    "#FF00FF",
+    "#00FFFF"
+  ],
+  "output": {
+    "width": 1920,
+    "height": 1080,
+    "background_color": "#FFFFFF"
+  }
+}

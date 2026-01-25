@@ -1,0 +1,29 @@
+# Build directories
+build/
+_skbuild/
+dist/
+*.egg-info/
+
+# Compiled Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.dylib
+*.dll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Output files
+*.png
+animation_frames/
+output_*.png
+
+# OS files
+.DS_Store
+Thumbs.db
