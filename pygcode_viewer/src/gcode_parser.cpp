@@ -173,12 +173,15 @@ void GCodeParser::parse_gcode_command(const std::string& cmd, const std::map<cha
             }
             
             if (delta_e < -0.001f) {
-                // Retraction
+                // Retraction (with or without movement)
                 move_type = libvgcode::EMoveType::Retract;
-            } else if (delta_e > 0.001f) {
-                // Extrusion
+            } else if (delta_e > 0.001f && has_movement) {
+                // Extrusion: positive E delta WITH movement
                 move_type = libvgcode::EMoveType::Extrude;
                 result.extrusion_count++;
+            } else if (delta_e > 0.001f && !has_movement) {
+                // Unretract: positive E delta WITHOUT movement (prime/deretract)
+                move_type = libvgcode::EMoveType::Unretract;
             } else if (has_movement) {
                 // No extrusion change but has movement = travel
                 move_type = libvgcode::EMoveType::Travel;
@@ -209,6 +212,42 @@ void GCodeParser::parse_gcode_command(const std::string& cmd, const std::map<cha
         if (move_type != libvgcode::EMoveType::Noop) {
             add_vertex(state, move_type, result);
             result.move_count++;
+        }
+        
+    } else if (cmd == "G2" || cmd == "G3") {
+        // Arc movement: G2 = clockwise, G3 = counterclockwise
+        bool clockwise = (cmd == "G2");
+        
+        // Get target position (defaults to current if not specified)
+        float target_x, target_y;
+        if (state.relative_xyz) {
+            target_x = state.x + (params.count('X') ? params.at('X') : 0.0f);
+            target_y = state.y + (params.count('Y') ? params.at('Y') : 0.0f);
+        } else {
+            target_x = params.count('X') ? params.at('X') : state.x;
+            target_y = params.count('Y') ? params.at('Y') : state.y;
+        }
+        
+        // Get arc center offset (I, J are always relative to current position)
+        float i_offset = params.count('I') ? params.at('I') : 0.0f;
+        float j_offset = params.count('J') ? params.at('J') : 0.0f;
+        
+        // Get extrusion value
+        float e_value = 0.0f;
+        bool has_e = params.count('E') > 0;
+        if (has_e) {
+            e_value = params.at('E');
+        }
+        
+        // Update feedrate if specified
+        if (params.count('F')) {
+            state.feedrate = params.at('F') / 60.0f; // Convert from mm/min to mm/s
+        }
+        
+        // Skip if no arc center offset specified (invalid arc)
+        if (std::abs(i_offset) > 0.0001f || std::abs(j_offset) > 0.0001f) {
+            // Linearize the arc into line segments
+            linearize_arc(clockwise, target_x, target_y, i_offset, j_offset, e_value, has_e, state, result);
         }
         
     } else if (cmd == "G28") {
@@ -391,6 +430,138 @@ float GCodeParser::calculate_move_time(const ParserState& state, float new_x, fl
         return distance / state.feedrate;
     }
     return 0.0f;
+}
+
+void GCodeParser::linearize_arc(bool clockwise, float target_x, float target_y,
+                                 float i_offset, float j_offset, float total_e, bool has_e,
+                                 ParserState& state, GCodeParseResult& result) {
+    // Arc center is at current position + offset
+    float center_x = state.x + i_offset;
+    float center_y = state.y + j_offset;
+    
+    // Calculate radii from center to start and end points
+    float start_dx = state.x - center_x;
+    float start_dy = state.y - center_y;
+    float end_dx = target_x - center_x;
+    float end_dy = target_y - center_y;
+    
+    float radius = std::sqrt(start_dx * start_dx + start_dy * start_dy);
+    
+    // Skip degenerate arcs
+    if (radius < 0.001f) {
+        return;
+    }
+    
+    // Calculate start and end angles
+    float start_angle = std::atan2(start_dy, start_dx);
+    float end_angle = std::atan2(end_dy, end_dx);
+    
+    // Calculate angular distance
+    float angular_distance;
+    if (clockwise) {
+        // G2: clockwise - angle decreases
+        angular_distance = start_angle - end_angle;
+        if (angular_distance <= 0.0f) {
+            angular_distance += 2.0f * static_cast<float>(M_PI);
+        }
+    } else {
+        // G3: counterclockwise - angle increases
+        angular_distance = end_angle - start_angle;
+        if (angular_distance <= 0.0f) {
+            angular_distance += 2.0f * static_cast<float>(M_PI);
+        }
+    }
+    
+    // Calculate arc length
+    float arc_length = radius * angular_distance;
+    
+    // Adaptive segment sizing: smaller segments for tighter curves
+    // Segment length between 0.5mm and 2mm, based on radius
+    float segment_length = std::max(0.5f, std::min(2.0f, radius * 0.1f));
+    int num_segments = std::max(1, static_cast<int>(std::ceil(arc_length / segment_length)));
+    
+    // Limit segments to prevent excessive vertex generation
+    num_segments = std::min(num_segments, 100);
+    
+    // Calculate delta values per segment
+    float angle_step = angular_distance / static_cast<float>(num_segments);
+    if (clockwise) {
+        angle_step = -angle_step;
+    }
+    
+    // Calculate extrusion per segment
+    float delta_e_per_segment = 0.0f;
+    float start_e = state.e;
+    if (has_e) {
+        float total_delta_e;
+        if (state.relative_e) {
+            total_delta_e = total_e;
+        } else {
+            total_delta_e = total_e - state.e;
+        }
+        delta_e_per_segment = total_delta_e / static_cast<float>(num_segments);
+    }
+    
+    // Generate intermediate points along the arc
+    float current_angle = start_angle;
+    for (int i = 1; i <= num_segments; ++i) {
+        current_angle += angle_step;
+        
+        // Calculate new position on arc
+        float new_x, new_y;
+        if (i == num_segments) {
+            // Last segment - use exact target position to avoid rounding errors
+            new_x = target_x;
+            new_y = target_y;
+        } else {
+            new_x = center_x + radius * std::cos(current_angle);
+            new_y = center_y + radius * std::sin(current_angle);
+        }
+        
+        // Calculate time for this segment
+        state.time += calculate_move_time(state, new_x, new_y, state.z);
+        
+        // Update position state
+        state.prev_x = state.x;
+        state.prev_y = state.y;
+        state.prev_z = state.z;
+        state.x = new_x;
+        state.y = new_y;
+        
+        // Handle extrusion
+        libvgcode::EMoveType move_type = libvgcode::EMoveType::Noop;
+        if (has_e) {
+            if (delta_e_per_segment > 0.001f) {
+                // Extrusion move
+                move_type = libvgcode::EMoveType::Extrude;
+                result.extrusion_count++;
+            } else if (delta_e_per_segment < -0.001f) {
+                // Retraction (unlikely during arc but handle it)
+                move_type = libvgcode::EMoveType::Retract;
+            } else {
+                // No extrusion change but has movement = travel
+                move_type = libvgcode::EMoveType::Travel;
+                result.travel_count++;
+            }
+            
+            // Update E position
+            if (state.relative_e) {
+                state.e += delta_e_per_segment;
+            } else {
+                state.e = start_e + delta_e_per_segment * static_cast<float>(i);
+            }
+        } else {
+            // No E parameter = travel
+            move_type = libvgcode::EMoveType::Travel;
+            result.travel_count++;
+        }
+        
+        // Add vertex for this segment
+        if (move_type != libvgcode::EMoveType::Noop) {
+            add_vertex(state, move_type, result);
+            result.move_count++;
+        }
+    }
 }
 
 } // namespace pygcode

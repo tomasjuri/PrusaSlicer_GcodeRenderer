@@ -94,6 +94,16 @@ private:
     void update_bounding_box(float x, float y, float z, GCodeParseResult& result);
     float calculate_move_time(const ParserState& state, float new_x, float new_y, float new_z);
     
+    /// Linearize an arc (G2/G3) into line segments
+    /// @param clockwise true for G2 (clockwise), false for G3 (counterclockwise)
+    /// @param target_x, target_y Target position
+    /// @param i_offset, j_offset Offset from current position to arc center
+    /// @param total_e Total extrusion for the arc
+    /// @param has_e Whether extrusion was specified
+    void linearize_arc(bool clockwise, float target_x, float target_y, 
+                       float i_offset, float j_offset, float total_e, bool has_e,
+                       ParserState& state, GCodeParseResult& result);
+    
     std::vector<std::array<uint8_t, 3>> m_tool_colors;
 };
 

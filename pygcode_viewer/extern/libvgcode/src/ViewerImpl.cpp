@@ -921,17 +921,24 @@ static void extract_pos_and_or_hwa(const std::vector<PathVertex>& vertices, floa
         const EMoveType move_type = v.type;
         const bool prev_line_valid = i > 0 && valid_lines_bitset[i - 1];
         const Vec3 prev_line = prev_line_valid ? v.position - vertices[i - 1].position : ZERO;
-        const bool this_line_valid = i + 1 < vertices.size() &&
-                                     vertices[i + 1].position != v.position &&
-                                     vertices[i + 1].type == move_type &&
-                                     move_type != EMoveType::Seam;
-        const Vec3 this_line = this_line_valid ? vertices[i + 1].position - v.position : ZERO;
+        
+        // Check if segment i (from position[i] to position[i+1]) is geometrically valid
+        const bool has_next = i + 1 < vertices.size();
+        const bool has_length = has_next && vertices[i + 1].position != v.position;
+        const EMoveType next_type = has_next ? vertices[i + 1].type : EMoveType::Noop;
+        
+        // A segment is valid if it has non-zero length and the destination is a renderable move type
+        // (not Noop, not Seam). The segment type is determined by the destination vertex.
+        const bool segment_valid = has_length &&
+                                   next_type != EMoveType::Noop &&
+                                   next_type != EMoveType::Seam;
+        
+        // For smooth joint rendering, only apply angle when consecutive segments have the same type
+        const bool same_type_continuation = segment_valid && next_type == move_type;
+        const Vec3 this_line = same_type_continuation ? vertices[i + 1].position - v.position : ZERO;
 
-        if (this_line_valid) {
-            // there is a valid path between point i and i+1.
-        }
-        else {
-            // the connection is invalid, there should be no line rendered, ever
+        if (!segment_valid) {
+            // the connection is invalid (zero length or non-renderable type)
             if (update_bitset)
                 valid_lines_bitset.reset(i);
         }
@@ -1134,31 +1141,48 @@ void ViewerImpl::update_enabled_entities()
     for (size_t i = range[0]; i < range[1]; ++i) {
         const PathVertex& v = m_vertices[i];
 
-        if (!m_valid_lines_bitset[i] && !v.is_option())
+        // For options (point-based markers like Retract, Unretract, Seam, etc.),
+        // use the current vertex's properties
+        if (v.is_option()) {
+            if (!m_settings.options_visibility[size_t(move_type_to_option(v.type))])
+                continue;
+            enabled_options.push_back(static_cast<uint32_t>(i));
             continue;
-        if (v.is_travel()) {
+        }
+
+        // For segments (line from position[i] to position[i+1]),
+        // the segment type is determined by the destination vertex (i+1)
+        if (!m_valid_lines_bitset[i])
+            continue;
+        
+        // Check if there's a valid next vertex for the segment
+        if (i + 1 >= m_vertices.size())
+            continue;
+            
+        const PathVertex& next_v = m_vertices[i + 1];
+        
+        // Determine visibility based on the segment's type (from destination vertex)
+        if (next_v.is_travel()) {
             if (!m_settings.options_visibility[size_t(EOptionType::Travels)])
                 continue;
         }
-        else if (v.is_wipe()) {
+        else if (next_v.is_wipe()) {
             if (!m_settings.options_visibility[size_t(EOptionType::Wipes)])
                 continue;
         }
-        else if (v.is_option()) {
-            if (!m_settings.options_visibility[size_t(move_type_to_option(v.type))])
+        else if (next_v.is_extrusion()) {
+            if (!m_settings.extrusion_roles_visibility[size_t(next_v.role)])
                 continue;
         }
-        else if (v.is_extrusion()) {
-            if (!m_settings.extrusion_roles_visibility[size_t(v.role)])
-                continue;
+        else if (next_v.is_option()) {
+            // The segment ending at an option (like Retract) is typically a travel or extrude
+            // leading up to that point. Skip these segments as they're handled by the source.
+            continue;
         }
         else
             continue;
 
-        if (v.is_option())
-            enabled_options.push_back(static_cast<uint32_t>(i));
-        else
-            enabled_segments.push_back(static_cast<uint32_t>(i));
+        enabled_segments.push_back(static_cast<uint32_t>(i));
     }
 
 #ifdef ENABLE_OPENGL_ES

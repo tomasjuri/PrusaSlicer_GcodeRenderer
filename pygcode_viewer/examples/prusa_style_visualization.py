@@ -14,7 +14,7 @@ import pygcode_viewer
 
 def main():
     # Paths
-    gcode_path = "/Users/tomasjurica/projects/PrusaSlicer/3dbenchy_0.4n_0.2mm_PETG_MK4IS_45m.gcode"
+    gcode_path = "/Users/tomasjurica/projects/PrusaSlicer/Shape-Box_0.4n_0.2mm_PLA_MK4IS_20m.gcode"
     intrinsics_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "camera_intrinsic.json")
     
     if not os.path.exists(gcode_path):
