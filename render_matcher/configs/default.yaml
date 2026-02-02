@@ -1,0 +1,41 @@
+# Render Matcher CNN Training Configuration
+
+model:
+  backbone: "resnet18"        # resnet18, resnet34, resnet50, efficientnet_b0
+  pretrained: true
+  embedding_dim: 256
+  freeze_backbone: false
+
+data:
+  data_root: "../pygcode_viewer/outputs/batch"
+  patch_size: 224
+  num_workers: 4
+  min_negative_offset: 448    # Minimum pixel distance for same-image negatives (2x patch_size)
+  negative_ratio: 0.5         # Ratio of negative samples per batch
+  train_split: 0.8            # Train/validation split ratio
+  seed: 42
+
+training:
+  batch_size: 32
+  epochs: 100
+  lr: 0.001
+  weight_decay: 0.0001
+  threshold: 0.5              # For evaluation metrics
+  patience: 10                # Early stopping patience (0 to disable)
+  save_every: 10              # Save checkpoint every N epochs
+
+augmentations:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: false
+  rotation: 15                # Max rotation angle in degrees
+  brightness: 0.2             # Brightness adjustment range
+  contrast: 0.2               # Contrast adjustment range
+  blur: false                 # Enable Gaussian blur
+  blur_limit: 3               # Max blur kernel size
+
+logging:
+  sample_grid_size: 10        # 10x10 grid = 100 cells, 50 pairs (source|render per cell)
+  log_every_n_steps: 100
+  save_sample_grid: true      # Save samples_grid.png to disk
+  run_dir: "runs"             # TensorBoard log directory
