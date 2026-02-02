@@ -13,18 +13,33 @@ import json
 from pathlib import Path
 from typing import Tuple, Optional, Dict, List
 
-from utils import create_object_points
+
+def create_object_points(chessboard_size: Tuple[int, int], square_size: float) -> np.ndarray:
+    """
+    Create 3D object points for a chessboard pattern.
+    
+    Args:
+        chessboard_size: Tuple (width, height) - number of inner corners
+        square_size: Size of one square in mm
+    
+    Returns:
+        Array of 3D object points (N, 3) where z=0
+    """
+    objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
+    objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2)
+    objp *= square_size
+    return objp
 
 # ===== CONFIGURATION =====
 # Set IMAGE_DIR to your capture folder (created by capture.py)
-IMAGE_DIR = "/home/tomasjurica/projects/FingernailCalibration/Data/captures_baseline_95_105_20251215_131329_smallchessboard_calib"
+IMAGE_DIR = "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634"
 CHESSBOARD_WIDTH = 9  # Number of inner corners horizontally
 CHESSBOARD_HEIGHT = 6  # Number of inner corners vertically
 SQUARE_SIZE = 12.79  # Size of one square in mm (127.9mm per 10 squares)
 OUTPUT_FILE = "camera_intrinsic.json"  # Output JSON file path
 VISUALIZE_CORNERS = False  # Show images with detected corners (set False for headless)
 SAVE_VISUALIZATIONS = True  # Save visualization images to disk
-VISUALIZATION_DIR = "corners_visualized_95_105_0251215_131329"  # Directory to save visualization images
+VISUALIZATION_DIR = "corners_visualized_20260127_083403"  # Directory to save visualization images
 # =========================
 
 

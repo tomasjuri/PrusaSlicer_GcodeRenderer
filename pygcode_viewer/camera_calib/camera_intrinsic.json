@@ -1,0 +1,108 @@
+{
+  "camera_matrix": [
+    [
+      2060.169792512589,
+      0.0,
+      2296.2074481179634
+    ],
+    [
+      0.0,
+      2066.8498300476435,
+      1357.5174332280253
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "distortion_coefficients": [
+    [
+      -0.06020363313051933,
+      0.1160515023170401,
+      0.0012868778871762039,
+      3.606635408737016e-05,
+      -0.07570815522150567
+    ]
+  ],
+  "image_size": [
+    4608,
+    2592
+  ],
+  "chessboard_size": [
+    9,
+    6
+  ],
+  "square_size": 12.79,
+  "mean_reprojection_error": 0.0906309711615601,
+  "num_images_used": 67,
+  "successful_images": [
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_001.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_002.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_003.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_004.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_005.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_008.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_009.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_010.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_011.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_012.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_013.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_014.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_015.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_016.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_017.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_018.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_019.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_020.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_022.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_023.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_025.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_026.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_027.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_028.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_029.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_030.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_031.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_032.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_035.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_036.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_037.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_038.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_039.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_040.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_041.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_042.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_043.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_044.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_045.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_046.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_047.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_048.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_049.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_050.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_051.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_052.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_053.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_054.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_055.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_056.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_057.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_058.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_059.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_060.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_061.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_062.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_063.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_064.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_065.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_066.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_067.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_068.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_070.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_071.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_072.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_073.jpg",
+    "/Users/tomasjurica/projects/PrusaSlicer/data/calibration_captures/20260131_074634/calib_074.jpg"
+  ]
+}
