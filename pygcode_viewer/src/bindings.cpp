@@ -147,26 +147,93 @@ PYBIND11_MODULE(_pygcode_viewer, m) {
                 const py::dict& camera_dict,
                 const py::object& config) {
                  
-                 // Extract camera parameters
-                 float pos_x = 100, pos_y = 100, pos_z = 100;
-                 float target_x = 0, target_y = 0, target_z = 50;
+                 // Check for extrinsic camera parameters (rvec/tvec or rotation/translation)
+                 // Priority: rvec/tvec > rotation/translation > position/target/up
+                 bool use_extrinsics = false;
+                 float rvec_x = 0, rvec_y = 0, rvec_z = 0;
+                 float tvec_x = 0, tvec_y = 0, tvec_z = 0;
+                 pygcode::Mat3x3 rotation_matrix;
+                 bool has_rotation_matrix = false;
                  
-                 if (camera_dict.contains("position")) {
-                     py::sequence pos = camera_dict["position"].cast<py::sequence>();
-                     if (pos.size() >= 3) {
-                         pos_x = pos[0].cast<float>();
-                         pos_y = pos[1].cast<float>();
-                         pos_z = pos[2].cast<float>();
+                 // Check for rvec/tvec (Rodrigues format from cv2.solvePnP)
+                 if (camera_dict.contains("rvec") && camera_dict.contains("tvec")) {
+                     py::sequence rvec = camera_dict["rvec"].cast<py::sequence>();
+                     py::sequence tvec = camera_dict["tvec"].cast<py::sequence>();
+                     if (rvec.size() >= 3 && tvec.size() >= 3) {
+                         rvec_x = rvec[0].cast<float>();
+                         rvec_y = rvec[1].cast<float>();
+                         rvec_z = rvec[2].cast<float>();
+                         tvec_x = tvec[0].cast<float>();
+                         tvec_y = tvec[1].cast<float>();
+                         tvec_z = tvec[2].cast<float>();
+                         use_extrinsics = true;
+                     }
+                 }
+                 // Check for rotation/translation (3x3 matrix format)
+                 else if (camera_dict.contains("rotation") && camera_dict.contains("translation")) {
+                     py::sequence rot = camera_dict["rotation"].cast<py::sequence>();
+                     py::sequence trans = camera_dict["translation"].cast<py::sequence>();
+                     if (rot.size() >= 3 && trans.size() >= 3) {
+                         // Parse 3x3 rotation matrix
+                         for (int i = 0; i < 3; ++i) {
+                             py::sequence row = rot[i].cast<py::sequence>();
+                             if (row.size() >= 3) {
+                                 rotation_matrix[i][0] = row[0].cast<float>();
+                                 rotation_matrix[i][1] = row[1].cast<float>();
+                                 rotation_matrix[i][2] = row[2].cast<float>();
+                             }
+                         }
+                         tvec_x = trans[0].cast<float>();
+                         tvec_y = trans[1].cast<float>();
+                         tvec_z = trans[2].cast<float>();
+                         has_rotation_matrix = true;
+                         use_extrinsics = true;
                      }
                  }
                  
-                 if (camera_dict.contains("target")) {
-                     py::sequence tgt = camera_dict["target"].cast<py::sequence>();
-                     if (tgt.size() >= 3) {
-                         target_x = tgt[0].cast<float>();
-                         target_y = tgt[1].cast<float>();
-                         target_z = tgt[2].cast<float>();
+                 // Fall back to position/target/up
+                 float pos_x = 100, pos_y = 100, pos_z = 100;
+                 float target_x = 0, target_y = 0, target_z = 50;
+                 float up_x = 0, up_y = 0, up_z = 1;  // Default Z-up
+                 
+                 if (!use_extrinsics) {
+                     if (camera_dict.contains("position")) {
+                         py::sequence pos = camera_dict["position"].cast<py::sequence>();
+                         if (pos.size() >= 3) {
+                             pos_x = pos[0].cast<float>();
+                             pos_y = pos[1].cast<float>();
+                             pos_z = pos[2].cast<float>();
+                         }
                      }
+                     
+                     if (camera_dict.contains("target")) {
+                         py::sequence tgt = camera_dict["target"].cast<py::sequence>();
+                         if (tgt.size() >= 3) {
+                             target_x = tgt[0].cast<float>();
+                             target_y = tgt[1].cast<float>();
+                             target_z = tgt[2].cast<float>();
+                         }
+                     }
+                     
+                     // Extract up vector (important for camera orientation!)
+                     if (camera_dict.contains("up")) {
+                         py::sequence up = camera_dict["up"].cast<py::sequence>();
+                         if (up.size() >= 3) {
+                             up_x = up[0].cast<float>();
+                             up_y = up[1].cast<float>();
+                             up_z = up[2].cast<float>();
+                         }
+                     }
+                 }
+                 
+                 // Extract optional near/far planes
+                 float near_plane = 0.1f;
+                 float far_plane = 10000.0f;
+                 if (camera_dict.contains("near")) {
+                     near_plane = camera_dict["near"].cast<float>();
+                 }
+                 if (camera_dict.contains("far")) {
+                     far_plane = camera_dict["far"].cast<float>();
                  }
                  
                  // Extract optional camera intrinsics
@@ -221,18 +288,50 @@ PYBIND11_MODULE(_pygcode_viewer, m) {
                      config_json = config.cast<std::string>();
                  }
                  
-                 self.render_to_file(output_path, width, height,
-                                     pos_x, pos_y, pos_z,
-                                     target_x, target_y, target_z,
-                                     intrinsics,
-                                     config_json);
+                 // Call appropriate render method based on camera parameters
+                 if (use_extrinsics) {
+                     if (has_rotation_matrix) {
+                         self.render_to_file_extrinsics(output_path, width, height,
+                                                        rotation_matrix,
+                                                        tvec_x, tvec_y, tvec_z,
+                                                        near_plane, far_plane,
+                                                        intrinsics,
+                                                        config_json);
+                     } else {
+                         self.render_to_file_rodrigues(output_path, width, height,
+                                                       rvec_x, rvec_y, rvec_z,
+                                                       tvec_x, tvec_y, tvec_z,
+                                                       near_plane, far_plane,
+                                                       intrinsics,
+                                                       config_json);
+                     }
+                 } else {
+                     self.render_to_file(output_path, width, height,
+                                         pos_x, pos_y, pos_z,
+                                         target_x, target_y, target_z,
+                                         up_x, up_y, up_z,
+                                         near_plane, far_plane,
+                                         intrinsics,
+                                         config_json);
+                 }
              },
              py::arg("output_path"),
              py::arg("width"),
              py::arg("height"),
              py::arg("camera"),
              py::arg("config"),
-             "Render GCODE to a PNG file. Camera dict can include 'intrinsics' with camera_matrix or fx/fy/cx/cy values.")
+             R"doc(Render GCODE to a PNG file.
+
+Camera dict supports multiple formats:
+- Position/target/up: {"position": [x,y,z], "target": [x,y,z], "up": [x,y,z]}
+- Rodrigues (from solvePnP): {"rvec": [rx,ry,rz], "tvec": [tx,ty,tz]}
+- Rotation matrix: {"rotation": [[r00,r01,r02],...], "translation": [tx,ty,tz]}
+
+Optional camera dict keys:
+- "near": near clipping plane (default 0.1)
+- "far": far clipping plane (default 10000)
+- "intrinsics": camera intrinsics dict with camera_matrix or fx/fy/cx/cy values
+)doc")
         ;
     
     // Version info

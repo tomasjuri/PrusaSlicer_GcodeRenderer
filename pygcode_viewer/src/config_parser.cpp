@@ -374,9 +374,9 @@ void ConfigParser::apply_config(libvgcode::Viewer& viewer, const ViewConfig& con
         viewer.set_layers_view_range(min_layer, max_layer);
     }
     
-    // Set the view visible range to show all vertices
-    auto full_range = viewer.get_view_full_range();
-    viewer.set_view_visible_range(full_range[0], full_range[1]);
+    // Set the view visible range to the enabled range (respects layer filtering)
+    auto enabled_range = viewer.get_view_enabled_range();
+    viewer.set_view_visible_range(enabled_range[0], enabled_range[1]);
     
     // Set option visibility
     for (const auto& pair : config.option_visibility) {

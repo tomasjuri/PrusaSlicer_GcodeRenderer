@@ -21,3 +21,6 @@ deps/build-linux/*
 **/.idea/
 .pkg_cache
 CMakeUserPresets.json
+data/layer_captures/*
+data/calibration_captures/*
+pygcode_viewer/camera_calib/corners_visualized_*

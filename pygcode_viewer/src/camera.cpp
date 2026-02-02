@@ -124,6 +124,55 @@ void Camera::fit_to_bbox(const std::array<float, 6>& bbox, float padding) {
     m_params.far_plane = distance * 10.0f;
 }
 
+void Camera::set_from_rodrigues(const Vec3f& rvec, const Vec3f& tvec) {
+    // Convert Rodrigues rotation vector to rotation matrix
+    Mat3x3 R = MatrixUtils::rodrigues_to_matrix(rvec);
+    set_from_extrinsics(R, tvec);
+}
+
+void Camera::set_from_rodrigues(float rx, float ry, float rz, float tx, float ty, float tz) {
+    set_from_rodrigues(Vec3f(rx, ry, rz), Vec3f(tx, ty, tz));
+}
+
+void Camera::set_from_extrinsics(const std::array<std::array<float, 3>, 3>& R, const Vec3f& t) {
+    // The extrinsic matrix [R|t] transforms world points to camera coordinates:
+    //   P_camera = R * P_world + t
+    //
+    // Camera position in world coordinates:
+    //   C = -R^T * t
+    //
+    // The rotation matrix R has columns that represent the world axes in camera frame.
+    // R^T has rows that represent camera axes in world frame:
+    //   R^T[0] = camera X axis (right) in world
+    //   R^T[1] = camera Y axis (down in OpenCV, up in OpenGL)
+    //   R^T[2] = camera Z axis (forward/optical axis)
+    
+    Mat3x3 R_T = MatrixUtils::transpose3x3(R);
+    
+    // Camera position in world
+    Vec3f neg_t = t * (-1.0f);
+    Vec3f camera_pos = MatrixUtils::multiply3x3_vec(R_T, neg_t);
+    
+    // Extract camera axes from R^T
+    // OpenCV convention: Z points forward (into scene), Y points down, X points right
+    // We need to convert to our convention
+    Vec3f cam_right(R_T[0][0], R_T[0][1], R_T[0][2]);
+    Vec3f cam_down(R_T[1][0], R_T[1][1], R_T[1][2]);   // OpenCV Y is down
+    Vec3f cam_forward(R_T[2][0], R_T[2][1], R_T[2][2]);
+    
+    // Up vector is opposite of cam_down (OpenCV Y points down, we want up)
+    Vec3f cam_up = cam_down * (-1.0f);
+    
+    // Target is a point along the optical axis
+    float target_dist = 100.0f;  // Arbitrary distance along optical axis
+    Vec3f target = camera_pos + cam_forward * target_dist;
+    
+    // Set camera parameters
+    m_params.position = camera_pos;
+    m_params.target = target;
+    m_params.up = cam_up;
+}
+
 //=============================================================================
 // MatrixUtils
 //=============================================================================
@@ -137,6 +186,75 @@ libvgcode::Mat4x4 identity() {
         0, 0, 1, 0,
         0, 0, 0, 1
     };
+}
+
+Mat3x3 identity3x3() {
+    return {{
+        {1.0f, 0.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f}
+    }};
+}
+
+Mat3x3 rodrigues_to_matrix(const Vec3f& rvec) {
+    // Rodrigues' rotation formula:
+    // R = I + sin(theta) * K + (1 - cos(theta)) * K^2
+    // where theta = ||rvec|| and K is the skew-symmetric matrix of rvec/theta
+    
+    float theta = rvec.length();
+    
+    if (theta < 1e-8f) {
+        // For very small rotations, return identity
+        return identity3x3();
+    }
+    
+    // Normalized axis
+    float inv_theta = 1.0f / theta;
+    float rx = rvec.x * inv_theta;
+    float ry = rvec.y * inv_theta;
+    float rz = rvec.z * inv_theta;
+    
+    float c = std::cos(theta);
+    float s = std::sin(theta);
+    float c1 = 1.0f - c;
+    
+    // Rodrigues formula components
+    // R = cos(theta)*I + (1-cos(theta))*r*r^T + sin(theta)*[r]_x
+    // where [r]_x is the skew-symmetric matrix
+    
+    Mat3x3 R;
+    
+    R[0][0] = c + rx * rx * c1;
+    R[0][1] = rx * ry * c1 - rz * s;
+    R[0][2] = rx * rz * c1 + ry * s;
+    
+    R[1][0] = ry * rx * c1 + rz * s;
+    R[1][1] = c + ry * ry * c1;
+    R[1][2] = ry * rz * c1 - rx * s;
+    
+    R[2][0] = rz * rx * c1 - ry * s;
+    R[2][1] = rz * ry * c1 + rx * s;
+    R[2][2] = c + rz * rz * c1;
+    
+    return R;
+}
+
+Mat3x3 transpose3x3(const Mat3x3& m) {
+    Mat3x3 result;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            result[i][j] = m[j][i];
+        }
+    }
+    return result;
+}
+
+Vec3f multiply3x3_vec(const Mat3x3& m, const Vec3f& v) {
+    return Vec3f(
+        m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z,
+        m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z,
+        m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z
+    );
 }
 
 libvgcode::Mat4x4 look_at(const Vec3f& eye, const Vec3f& target, const Vec3f& up) {

@@ -95,6 +95,55 @@ public:
         const std::string& config_json
     );
     
+    /// Render with camera intrinsics and up vector support
+    void render_to_file(
+        const std::string& output_path,
+        int width,
+        int height,
+        float cam_pos_x, float cam_pos_y, float cam_pos_z,
+        float cam_target_x, float cam_target_y, float cam_target_z,
+        float cam_up_x, float cam_up_y, float cam_up_z,
+        const CameraIntrinsics& intrinsics,
+        const std::string& config_json
+    );
+    
+    /// Render with position/target/up, near/far planes, and intrinsics
+    void render_to_file(
+        const std::string& output_path,
+        int width,
+        int height,
+        float cam_pos_x, float cam_pos_y, float cam_pos_z,
+        float cam_target_x, float cam_target_y, float cam_target_z,
+        float cam_up_x, float cam_up_y, float cam_up_z,
+        float near_plane, float far_plane,
+        const CameraIntrinsics& intrinsics,
+        const std::string& config_json
+    );
+    
+    /// Render using Rodrigues rotation vector (from cv2.solvePnP)
+    void render_to_file_rodrigues(
+        const std::string& output_path,
+        int width,
+        int height,
+        float rvec_x, float rvec_y, float rvec_z,
+        float tvec_x, float tvec_y, float tvec_z,
+        float near_plane, float far_plane,
+        const CameraIntrinsics& intrinsics,
+        const std::string& config_json
+    );
+    
+    /// Render using rotation matrix and translation vector
+    void render_to_file_extrinsics(
+        const std::string& output_path,
+        int width,
+        int height,
+        const Mat3x3& rotation,
+        float tvec_x, float tvec_y, float tvec_z,
+        float near_plane, float far_plane,
+        const CameraIntrinsics& intrinsics,
+        const std::string& config_json
+    );
+    
 private:
     void ensure_context();
     void init_viewer();

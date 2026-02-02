@@ -210,6 +210,24 @@ void GCodeViewerCore::render_to_file(
     const CameraIntrinsics& intrinsics,
     const std::string& config_json
 ) {
+    // Call the version with default up vector (Z-up)
+    render_to_file(output_path, width, height,
+                   cam_pos_x, cam_pos_y, cam_pos_z,
+                   cam_target_x, cam_target_y, cam_target_z,
+                   0.0f, 0.0f, 1.0f,  // Default up vector
+                   intrinsics, config_json);
+}
+
+void GCodeViewerCore::render_to_file(
+    const std::string& output_path,
+    int width,
+    int height,
+    float cam_pos_x, float cam_pos_y, float cam_pos_z,
+    float cam_target_x, float cam_target_y, float cam_target_z,
+    float cam_up_x, float cam_up_y, float cam_up_z,
+    const CameraIntrinsics& intrinsics,
+    const std::string& config_json
+) {
     if (!m_loaded) {
         throw std::runtime_error("No GCODE loaded. Call load() first.");
     }
@@ -227,6 +245,235 @@ void GCodeViewerCore::render_to_file(
     // Set up camera
     m_camera.set_position(cam_pos_x, cam_pos_y, cam_pos_z);
     m_camera.set_target(cam_target_x, cam_target_y, cam_target_z);
+    m_camera.set_up(cam_up_x, cam_up_y, cam_up_z);
+    
+    // Apply intrinsics if valid
+    if (intrinsics.is_valid) {
+        m_camera.set_intrinsics(intrinsics);
+    } else {
+        m_camera.set_use_intrinsics(false);
+    }
+    
+    // Use config dimensions if not specified
+    if (width <= 0) width = m_config.width;
+    if (height <= 0) height = m_config.height;
+    
+    // Set up or resize framebuffer
+    if (!m_framebuffer) {
+        m_framebuffer = std::make_unique<FramebufferRenderer>();
+    }
+    
+    if (m_current_width != width || m_current_height != height) {
+        if (!m_framebuffer->init(width, height)) {
+            throw std::runtime_error("Failed to create framebuffer");
+        }
+        m_current_width = width;
+        m_current_height = height;
+    }
+    
+    // Get matrices
+    auto view_matrix = m_camera.get_view_matrix();
+    auto projection_matrix = m_camera.get_projection_matrix(width, height);
+    
+    // Render
+    bool success = m_framebuffer->render_to_file(
+        output_path,
+        m_config.background_color,
+        [this, &view_matrix, &projection_matrix]() {
+            // Render bed first (under the model)
+            if (m_bed_renderer && m_bed_config.show_outline) {
+                m_bed_renderer->render(view_matrix.data(), projection_matrix.data());
+            }
+            // Render the GCODE
+            m_viewer->render(view_matrix, projection_matrix);
+        }
+    );
+    
+    if (!success) {
+        throw std::runtime_error("Failed to render to file: " + output_path);
+    }
+}
+
+void GCodeViewerCore::render_to_file(
+    const std::string& output_path,
+    int width,
+    int height,
+    float cam_pos_x, float cam_pos_y, float cam_pos_z,
+    float cam_target_x, float cam_target_y, float cam_target_z,
+    float cam_up_x, float cam_up_y, float cam_up_z,
+    float near_plane, float far_plane,
+    const CameraIntrinsics& intrinsics,
+    const std::string& config_json
+) {
+    if (!m_loaded) {
+        throw std::runtime_error("No GCODE loaded. Call load() first.");
+    }
+    
+    ensure_context();
+    
+    // Parse config if provided
+    if (!config_json.empty()) {
+        m_config = ConfigParser::parse_json(config_json);
+    }
+    
+    // Apply configuration to viewer
+    ConfigParser::apply_config(*m_viewer, m_config);
+    
+    // Set up camera
+    m_camera.set_position(cam_pos_x, cam_pos_y, cam_pos_z);
+    m_camera.set_target(cam_target_x, cam_target_y, cam_target_z);
+    m_camera.set_up(cam_up_x, cam_up_y, cam_up_z);
+    m_camera.set_clip_planes(near_plane, far_plane);
+    
+    // Apply intrinsics if valid
+    if (intrinsics.is_valid) {
+        m_camera.set_intrinsics(intrinsics);
+    } else {
+        m_camera.set_use_intrinsics(false);
+    }
+    
+    // Use config dimensions if not specified
+    if (width <= 0) width = m_config.width;
+    if (height <= 0) height = m_config.height;
+    
+    // Set up or resize framebuffer
+    if (!m_framebuffer) {
+        m_framebuffer = std::make_unique<FramebufferRenderer>();
+    }
+    
+    if (m_current_width != width || m_current_height != height) {
+        if (!m_framebuffer->init(width, height)) {
+            throw std::runtime_error("Failed to create framebuffer");
+        }
+        m_current_width = width;
+        m_current_height = height;
+    }
+    
+    // Get matrices
+    auto view_matrix = m_camera.get_view_matrix();
+    auto projection_matrix = m_camera.get_projection_matrix(width, height);
+    
+    // Render
+    bool success = m_framebuffer->render_to_file(
+        output_path,
+        m_config.background_color,
+        [this, &view_matrix, &projection_matrix]() {
+            // Render bed first (under the model)
+            if (m_bed_renderer && m_bed_config.show_outline) {
+                m_bed_renderer->render(view_matrix.data(), projection_matrix.data());
+            }
+            // Render the GCODE
+            m_viewer->render(view_matrix, projection_matrix);
+        }
+    );
+    
+    if (!success) {
+        throw std::runtime_error("Failed to render to file: " + output_path);
+    }
+}
+
+void GCodeViewerCore::render_to_file_rodrigues(
+    const std::string& output_path,
+    int width,
+    int height,
+    float rvec_x, float rvec_y, float rvec_z,
+    float tvec_x, float tvec_y, float tvec_z,
+    float near_plane, float far_plane,
+    const CameraIntrinsics& intrinsics,
+    const std::string& config_json
+) {
+    if (!m_loaded) {
+        throw std::runtime_error("No GCODE loaded. Call load() first.");
+    }
+    
+    ensure_context();
+    
+    // Parse config if provided
+    if (!config_json.empty()) {
+        m_config = ConfigParser::parse_json(config_json);
+    }
+    
+    // Apply configuration to viewer
+    ConfigParser::apply_config(*m_viewer, m_config);
+    
+    // Set up camera from Rodrigues rotation vector and translation
+    m_camera.set_from_rodrigues(rvec_x, rvec_y, rvec_z, tvec_x, tvec_y, tvec_z);
+    m_camera.set_clip_planes(near_plane, far_plane);
+    
+    // Apply intrinsics if valid
+    if (intrinsics.is_valid) {
+        m_camera.set_intrinsics(intrinsics);
+    } else {
+        m_camera.set_use_intrinsics(false);
+    }
+    
+    // Use config dimensions if not specified
+    if (width <= 0) width = m_config.width;
+    if (height <= 0) height = m_config.height;
+    
+    // Set up or resize framebuffer
+    if (!m_framebuffer) {
+        m_framebuffer = std::make_unique<FramebufferRenderer>();
+    }
+    
+    if (m_current_width != width || m_current_height != height) {
+        if (!m_framebuffer->init(width, height)) {
+            throw std::runtime_error("Failed to create framebuffer");
+        }
+        m_current_width = width;
+        m_current_height = height;
+    }
+    
+    // Get matrices
+    auto view_matrix = m_camera.get_view_matrix();
+    auto projection_matrix = m_camera.get_projection_matrix(width, height);
+    
+    // Render
+    bool success = m_framebuffer->render_to_file(
+        output_path,
+        m_config.background_color,
+        [this, &view_matrix, &projection_matrix]() {
+            // Render bed first (under the model)
+            if (m_bed_renderer && m_bed_config.show_outline) {
+                m_bed_renderer->render(view_matrix.data(), projection_matrix.data());
+            }
+            // Render the GCODE
+            m_viewer->render(view_matrix, projection_matrix);
+        }
+    );
+    
+    if (!success) {
+        throw std::runtime_error("Failed to render to file: " + output_path);
+    }
+}
+
+void GCodeViewerCore::render_to_file_extrinsics(
+    const std::string& output_path,
+    int width,
+    int height,
+    const Mat3x3& rotation,
+    float tvec_x, float tvec_y, float tvec_z,
+    float near_plane, float far_plane,
+    const CameraIntrinsics& intrinsics,
+    const std::string& config_json
+) {
+    if (!m_loaded) {
+        throw std::runtime_error("No GCODE loaded. Call load() first.");
+    }
+    
+    ensure_context();
+    
+    // Parse config if provided
+    if (!config_json.empty()) {
+        m_config = ConfigParser::parse_json(config_json);
+    }
+    
+    // Apply configuration to viewer
+    ConfigParser::apply_config(*m_viewer, m_config);
+    
+    // Set up camera from rotation matrix and translation
+    m_camera.set_from_extrinsics(rotation, Vec3f(tvec_x, tvec_y, tvec_z));
+    m_camera.set_clip_planes(near_plane, far_plane);
     
     // Apply intrinsics if valid
     if (intrinsics.is_valid) {

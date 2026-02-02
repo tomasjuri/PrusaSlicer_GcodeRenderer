@@ -169,17 +169,46 @@ public:
     /// Auto-fit camera to view a bounding box
     void fit_to_bbox(const std::array<float, 6>& bbox, float padding = 1.2f);
     
+    /// Set camera pose from OpenCV-style rvec (Rodrigues rotation vector) and tvec (translation)
+    /// This is the format returned by cv2.solvePnP()
+    /// rvec: Rodrigues rotation vector (3 elements)
+    /// tvec: Translation vector (3 elements)
+    void set_from_rodrigues(const Vec3f& rvec, const Vec3f& tvec);
+    void set_from_rodrigues(float rx, float ry, float rz, float tx, float ty, float tz);
+    
+    /// Set camera pose from rotation matrix R and translation vector t
+    /// Camera position in world coordinates: C = -R^T * t
+    /// R: 3x3 rotation matrix (row-major)
+    /// t: Translation vector
+    void set_from_extrinsics(const std::array<std::array<float, 3>, 3>& R, const Vec3f& t);
+    
 private:
     CameraParams m_params;
 };
+
+/// 3x3 matrix type for rotation matrices
+using Mat3x3 = std::array<std::array<float, 3>, 3>;
 
 /// Matrix utilities
 namespace MatrixUtils {
     /// Create identity matrix
     libvgcode::Mat4x4 identity();
     
+    /// Create 3x3 identity matrix
+    Mat3x3 identity3x3();
+    
     /// Create look-at matrix (view matrix)
     libvgcode::Mat4x4 look_at(const Vec3f& eye, const Vec3f& target, const Vec3f& up);
+    
+    /// Convert Rodrigues rotation vector to 3x3 rotation matrix
+    /// This is the same formula as cv2.Rodrigues()
+    Mat3x3 rodrigues_to_matrix(const Vec3f& rvec);
+    
+    /// Transpose a 3x3 matrix
+    Mat3x3 transpose3x3(const Mat3x3& m);
+    
+    /// Multiply 3x3 matrix by a Vec3f
+    Vec3f multiply3x3_vec(const Mat3x3& m, const Vec3f& v);
     
     /// Create perspective projection matrix from FOV
     libvgcode::Mat4x4 perspective(float fov_radians, float aspect, float near_plane, float far_plane);

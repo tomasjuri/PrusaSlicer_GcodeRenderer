@@ -188,24 +188,74 @@ class CameraIntrinsics:
 
 @dataclass
 class CameraParams:
-    """Camera parameters for rendering."""
+    """
+    Camera parameters for rendering.
     
+    Supports two modes of camera specification:
+    1. Position/target/up mode (traditional look-at camera)
+    2. Extrinsic mode (rvec/tvec from cv2.solvePnP or rotation matrix/translation)
+    
+    When extrinsics are set, they take priority over position/target/up.
+    """
+    
+    # Traditional look-at camera parameters
     position: Tuple[float, float, float] = (100.0, 100.0, 100.0)
     target: Tuple[float, float, float] = (0.0, 0.0, 50.0)
     up: Tuple[float, float, float] = (0.0, 0.0, 1.0)
     fov: float = 45.0
+    
+    # Extrinsic parameters (from cv2.solvePnP)
+    rvec: Optional[Tuple[float, float, float]] = None  # Rodrigues rotation vector
+    tvec: Optional[Tuple[float, float, float]] = None  # Translation vector
+    
+    # Alternative: rotation matrix (3x3) instead of rvec
+    rotation: Optional[List[List[float]]] = None
+    
+    # Clipping planes
+    near_plane: float = 0.1
+    far_plane: float = 10000.0
+    
+    # Intrinsic matrix
     intrinsics: Optional[CameraIntrinsics] = None
     
+    @property
+    def uses_extrinsics(self) -> bool:
+        """Check if extrinsic mode is active."""
+        return (self.rvec is not None and self.tvec is not None) or \
+               (self.rotation is not None and self.tvec is not None)
+    
     def to_dict(self) -> dict:
-        result = {
-            "position": list(self.position),
-            "target": list(self.target),
-            "up": list(self.up),
-            "fov": self.fov,
-        }
+        """Convert to dictionary for passing to C++ bindings."""
+        result = {}
+        
+        # Add extrinsics if available (takes priority)
+        if self.rvec is not None and self.tvec is not None:
+            result["rvec"] = list(self.rvec)
+            result["tvec"] = list(self.tvec)
+        elif self.rotation is not None and self.tvec is not None:
+            result["rotation"] = self.rotation
+            result["translation"] = list(self.tvec)
+        else:
+            # Fall back to position/target/up
+            result["position"] = list(self.position)
+            result["target"] = list(self.target)
+            result["up"] = list(self.up)
+        
+        # Add common parameters
+        result["fov"] = self.fov
+        result["near"] = self.near_plane
+        result["far"] = self.far_plane
+        
         if self.intrinsics is not None and self.intrinsics.is_valid:
             result["intrinsics"] = self.intrinsics.to_dict()
+        
         return result
+    
+    def clear_extrinsics(self) -> None:
+        """Clear extrinsic parameters and use position/target/up mode."""
+        self.rvec = None
+        self.tvec = None
+        self.rotation = None
 
 
 @dataclass
@@ -381,7 +431,9 @@ class GCodeViewer:
         fov: Optional[float] = None,
     ) -> None:
         """
-        Set camera parameters.
+        Set camera parameters using position/target/up mode.
+        
+        This clears any extrinsic parameters that may have been set.
         
         Args:
             pos: Camera position (x, y, z)
@@ -389,6 +441,9 @@ class GCodeViewer:
             up: Up vector (x, y, z), default is (0, 0, 1)
             fov: Field of view in degrees
         """
+        # Clear extrinsics when using position/target/up
+        self._camera.clear_extrinsics()
+        
         if pos is not None:
             self._camera.position = pos
         if target is not None:
@@ -397,6 +452,115 @@ class GCodeViewer:
             self._camera.up = up
         if fov is not None:
             self._camera.fov = fov
+    
+    def set_camera_from_extrinsics(
+        self,
+        rvec: Optional[Tuple[float, float, float]] = None,
+        tvec: Optional[Tuple[float, float, float]] = None,
+        R: Optional[List[List[float]]] = None,
+        t: Optional[Tuple[float, float, float]] = None,
+    ) -> None:
+        """
+        Set camera pose from OpenCV extrinsics (e.g., from cv2.solvePnP).
+        
+        You can provide either:
+        - rvec/tvec: Rodrigues rotation vector and translation (from solvePnP)
+        - R/t: 3x3 rotation matrix and translation vector
+        
+        The extrinsic matrix [R|t] transforms world points to camera coordinates:
+            P_camera = R * P_world + t
+        
+        Args:
+            rvec: Rodrigues rotation vector (3 elements) from cv2.solvePnP
+            tvec: Translation vector (3 elements) from cv2.solvePnP
+            R: 3x3 rotation matrix (alternative to rvec)
+            t: Translation vector (alternative to tvec)
+        
+        Example:
+            # From cv2.solvePnP result
+            success, rvec, tvec = cv2.solvePnP(object_points, image_points, K, dist)
+            viewer.set_camera_from_extrinsics(
+                rvec=tuple(rvec.flatten()),
+                tvec=tuple(tvec.flatten())
+            )
+            
+            # From rotation matrix
+            R, _ = cv2.Rodrigues(rvec)
+            viewer.set_camera_from_extrinsics(R=R.tolist(), t=tuple(tvec.flatten()))
+        """
+        if rvec is not None and tvec is not None:
+            self._camera.rvec = rvec
+            self._camera.tvec = tvec
+            self._camera.rotation = None
+        elif R is not None and t is not None:
+            self._camera.rotation = R
+            self._camera.tvec = t
+            self._camera.rvec = None
+        else:
+            raise ValueError(
+                "Must provide either (rvec, tvec) or (R, t) pairs. "
+                "Both parameters in each pair must be provided."
+            )
+    
+    def set_near_far(self, near: float, far: float) -> None:
+        """
+        Set near and far clipping planes.
+        
+        Args:
+            near: Near clipping plane distance (default 0.1)
+            far: Far clipping plane distance (default 10000.0)
+        """
+        if near <= 0:
+            raise ValueError("Near plane must be positive")
+        if far <= near:
+            raise ValueError("Far plane must be greater than near plane")
+        self._camera.near_plane = near
+        self._camera.far_plane = far
+    
+    def get_camera_params(self) -> dict:
+        """
+        Get current camera parameters for debugging/validation.
+        
+        Returns:
+            Dictionary containing all camera parameters including:
+            - position, target, up (for look-at mode)
+            - rvec, tvec, rotation (for extrinsic mode)
+            - near_plane, far_plane
+            - intrinsics (if set)
+            - uses_extrinsics (bool indicating which mode is active)
+        """
+        params = {
+            "position": self._camera.position,
+            "target": self._camera.target,
+            "up": self._camera.up,
+            "fov": self._camera.fov,
+            "near_plane": self._camera.near_plane,
+            "far_plane": self._camera.far_plane,
+            "uses_extrinsics": self._camera.uses_extrinsics,
+        }
+        
+        if self._camera.rvec is not None:
+            params["rvec"] = self._camera.rvec
+        if self._camera.tvec is not None:
+            params["tvec"] = self._camera.tvec
+        if self._camera.rotation is not None:
+            params["rotation"] = self._camera.rotation
+        if self._camera.intrinsics is not None:
+            params["intrinsics"] = {
+                "fx": self._camera.intrinsics.fx,
+                "fy": self._camera.intrinsics.fy,
+                "cx": self._camera.intrinsics.cx,
+                "cy": self._camera.intrinsics.cy,
+                "image_width": self._camera.intrinsics.image_width,
+                "image_height": self._camera.intrinsics.image_height,
+                "is_valid": self._camera.intrinsics.is_valid,
+            }
+        
+        return params
+    
+    def clear_camera_extrinsics(self) -> None:
+        """Clear extrinsic parameters and switch to position/target/up mode."""
+        self._camera.clear_extrinsics()
     
     def set_intrinsics(
         self,
@@ -529,6 +693,7 @@ class GCodeViewer:
         output_path: Union[str, Path],
         width: Optional[int] = None,
         height: Optional[int] = None,
+        require_intrinsics: bool = False,
     ) -> None:
         """
         Render the GCODE to a PNG file.
@@ -537,9 +702,42 @@ class GCodeViewer:
             output_path: Output PNG file path
             width: Image width (uses config if not specified)
             height: Image height (uses config if not specified)
+            require_intrinsics: If True, raise an error when camera intrinsics
+                are not set or invalid. Use this to ensure calibrated camera
+                projection is always used (e.g., for overlay rendering).
+        
+        Raises:
+            RuntimeError: If no GCODE is loaded
+            ValueError: If require_intrinsics=True but intrinsics are not valid
         """
         if not self._loaded:
             raise RuntimeError("No GCODE file loaded. Call load() first.")
+        
+        # Check intrinsics if required
+        if require_intrinsics:
+            if self._camera.intrinsics is None:
+                raise ValueError(
+                    "Camera intrinsics are required but not set. "
+                    "Call set_intrinsics() first or set require_intrinsics=False."
+                )
+            if not self._camera.intrinsics.is_valid:
+                raise ValueError(
+                    "Camera intrinsics are set but invalid (check fx, fy, image_size). "
+                    f"Current values: fx={self._camera.intrinsics.fx}, "
+                    f"fy={self._camera.intrinsics.fy}, "
+                    f"image_size=({self._camera.intrinsics.image_width}, "
+                    f"{self._camera.intrinsics.image_height})"
+                )
+        elif self._camera.intrinsics is None or not self._camera.intrinsics.is_valid:
+            # Warn if intrinsics expected but not valid (non-fatal)
+            import warnings
+            if self._camera.uses_extrinsics:
+                warnings.warn(
+                    "Using camera extrinsics without valid intrinsics. "
+                    "The projection may not match a real camera. "
+                    "Consider calling set_intrinsics() for accurate overlay rendering.",
+                    UserWarning
+                )
         
         w = width or self._config.width
         h = height or self._config.height
