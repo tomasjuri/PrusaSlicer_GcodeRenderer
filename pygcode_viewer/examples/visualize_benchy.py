@@ -34,6 +34,12 @@ DEFAULT_IMAGE = SCRIPT_DIR.parent / "data" / "layer_captures" / \
     "4_3dbenchy_0.4n_0.2mm_PLA_MK4IS_45m.gcode_20260127_085607" / \
     "img_ZN41_Z8.4_X74_Y113_Z72.jpg"
 
+# Camera extrinsic offset from nozzle (mm)
+# Camera position = Nozzle position + offset
+CAMERA_OFFSET_X = 30.0   # Camera is 3cm in +X from nozzle
+CAMERA_OFFSET_Y = -10.0  # Camera is 1cm in -Y from nozzle
+CAMERA_OFFSET_Z = 5.0    # Camera is 0.5cm above nozzle
+
 
 def parse_capture(image_path: Path) -> dict:
     """Extract metadata from capture image and its companion JSON."""
@@ -98,14 +104,24 @@ def render_layer(meta: dict) -> Path:
     viewer.load(str(meta['gcode_path']))
     viewer.set_intrinsics(str(CALIB_PATH))
     
-    # Camera at nozzle position, looking down at the bed
+    # Compute camera position from nozzle + extrinsic offset
+    camera_x = meta['nozzle_x'] + CAMERA_OFFSET_X
+    camera_y = meta['nozzle_y'] + CAMERA_OFFSET_Y
+    camera_z = meta['nozzle_z'] + CAMERA_OFFSET_Z
+    
+    # Camera looking down at the bed
     # Up vector (0, 1, 0) means Y points up in the image (rotated 180° around Z vs (0,-1,0))
     viewer.set_camera(
-        pos=(meta['nozzle_x'], meta['nozzle_y'], meta['nozzle_z']),
-        target=(meta['nozzle_x'], meta['nozzle_y'] + 0.001, 0.0),
+        pos=(camera_x, camera_y, camera_z),
+        target=(camera_x, camera_y + 0.001, 0.0),
         up=(0.0, 1.0, 0.0),
     )
     viewer.set_near_far(1.0, 500.0)
+    
+    # Store camera position in meta for printing
+    meta['camera_x'] = camera_x
+    meta['camera_y'] = camera_y
+    meta['camera_z'] = camera_z
     
     # Configure view
     config = pygcode_viewer.ViewConfig()
@@ -178,6 +194,8 @@ def main():
     # Render
     print("\nRendering...")
     render_path = render_layer(meta)
+    print(f"  Camera: X={meta['camera_x']:.1f}, Y={meta['camera_y']:.1f}, Z={meta['camera_z']:.1f}")
+    print(f"  (offset: X={CAMERA_OFFSET_X:+.1f}, Y={CAMERA_OFFSET_Y:+.1f}, Z={CAMERA_OFFSET_Z:+.1f})")
     print(f"  {render_path}")
     
     # Overlay
