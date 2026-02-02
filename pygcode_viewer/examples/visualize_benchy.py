@@ -36,9 +36,9 @@ DEFAULT_IMAGE = SCRIPT_DIR.parent / "data" / "layer_captures" / \
 
 # Camera extrinsic offset from nozzle (mm)
 # Camera position = Nozzle position + offset
-CAMERA_OFFSET_X = 30.0   # Camera is 3cm in +X from nozzle
-CAMERA_OFFSET_Y = -10.0  # Camera is 1cm in -Y from nozzle
-CAMERA_OFFSET_Z = 5.0    # Camera is 0.5cm above nozzle
+CAMERA_OFFSET_X = 29.0   # Camera is 3cm in +X from nozzle
+CAMERA_OFFSET_Y = -24.0  # Camera is 1cm in -Y from nozzle
+CAMERA_OFFSET_Z = 8.0    # Camera is 0.5cm above nozzle
 
 
 def parse_capture(image_path: Path) -> dict:

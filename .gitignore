@@ -24,3 +24,4 @@ CMakeUserPresets.json
 data/layer_captures/*
 data/calibration_captures/*
 pygcode_viewer/camera_calib/corners_visualized_*
+pygcode_viewer/outputs/batch/*
