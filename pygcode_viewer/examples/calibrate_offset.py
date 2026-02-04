@@ -6,14 +6,22 @@ Use arrow keys to adjust camera extrinsic offset until the overlay aligns.
 Browse multiple images in a folder to verify calibration.
 
 Controls:
-    Arrow Left/Right or A/D: Adjust X offset (+/- 1mm)
-    Arrow Up/Down or W/X:    Adjust Y offset (+/- 1mm)
-    +/-:                     Adjust Z offset (+/- 1mm)
-    N or Space:              Next image
-    P or Backspace:          Previous image
-    R:                       Reset to initial values
-    S:                       Save/print current values
-    Q/ESC:                   Quit
+    Position:
+        Arrow Left/Right or A/D: Adjust X offset (+/- 1mm)
+        Arrow Up/Down or W/X:    Adjust Y offset (+/- 1mm)
+        +/-:                     Adjust Z offset (+/- 1mm)
+    
+    Rotation:
+        Z/C:                     Roll (rotate in image plane) +/- 0.5 deg
+        T/G:                     Pitch (tilt forward/back) +/- 0.5 deg
+        F/H:                     Yaw (pan left/right) +/- 0.5 deg
+    
+    Navigation:
+        N or Space:              Next image
+        P or Backspace:          Previous image
+        R:                       Reset to initial values
+        S:                       Save/print current values
+        Q/ESC:                   Quit
 
 Usage:
     python calibrate_offset.py [folder_or_image_path]
@@ -34,16 +42,84 @@ import numpy as np
 # Paths
 SCRIPT_DIR = Path(__file__).parent.parent
 CALIB_PATH = SCRIPT_DIR / "camera_calib" / "camera_intrinsic.json"
-DEFAULT_FOLDER = SCRIPT_DIR.parent / "data" / "layer_captures" / \
-    "4_3dbenchy_0.4n_0.2mm_PLA_MK4IS_45m.gcode_20260127_085607"
+DEFAULT_FOLDER = Path("/Users/tomasjurica/Downloads/layer_captures/3boxesSeamRandom_0.4n_0.25mm_PLA_MK4IS_1h12m.gcode_20260204_110630")
 
 # Initial offset values (from visualize_benchy.py)
-INITIAL_OFFSET_X = 29.0
-INITIAL_OFFSET_Y = -24.0
+INITIAL_OFFSET_X = 31.0
+INITIAL_OFFSET_Y = -26.0
 INITIAL_OFFSET_Z = 8.0
+
+# Initial rotation values (degrees)
+INITIAL_ROT_X = 0.0   # Pitch - tilt forward/backward
+INITIAL_ROT_Y = 0.0   # Yaw - pan left/right  
+INITIAL_ROT_Z = -2.0   # Roll - rotation in image plane
 
 # Display scale (images are 4608x2592, scale down for display)
 DISPLAY_SCALE = 0.35
+
+
+def compute_camera_orientation(rot_x: float, rot_y: float, rot_z: float) -> tuple:
+    """Compute rotated camera target offset and up vector.
+    
+    The camera initially looks straight down (-Z direction) with Y as up.
+    Rotations are applied in order: Z (roll), X (pitch), Y (yaw).
+    
+    Args:
+        rot_x: Pitch angle in degrees (tilt forward/backward around X axis)
+        rot_y: Yaw angle in degrees (pan left/right around Y axis)
+        rot_z: Roll angle in degrees (rotate in image plane around Z axis)
+    
+    Returns:
+        Tuple of (look_direction, up_vector) as numpy arrays
+    """
+    # Convert to radians
+    rx = np.radians(rot_x)
+    ry = np.radians(rot_y)
+    rz = np.radians(rot_z)
+    
+    # Initial vectors: camera looks down (-Z), up is +Y
+    look_dir = np.array([0.0, 0.0, -1.0])
+    up_vec = np.array([0.0, 1.0, 0.0])
+    
+    # Rotation matrix around X axis (pitch)
+    def rot_x_matrix(angle):
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([
+            [1, 0, 0],
+            [0, c, -s],
+            [0, s, c]
+        ])
+    
+    # Rotation matrix around Y axis (yaw)
+    def rot_y_matrix(angle):
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([
+            [c, 0, s],
+            [0, 1, 0],
+            [-s, 0, c]
+        ])
+    
+    # Rotation matrix around Z axis (roll)
+    def rot_z_matrix(angle):
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([
+            [c, -s, 0],
+            [s, c, 0],
+            [0, 0, 1]
+        ])
+    
+    # Apply rotations in order: Z (roll), X (pitch), Y (yaw)
+    # This order makes intuitive sense for a downward-looking camera
+    combined = rot_y_matrix(ry) @ rot_x_matrix(rx) @ rot_z_matrix(rz)
+    
+    look_dir = combined @ look_dir
+    up_vec = combined @ up_vec
+    
+    # Normalize
+    look_dir = look_dir / np.linalg.norm(look_dir)
+    up_vec = up_vec / np.linalg.norm(up_vec)
+    
+    return look_dir, up_vec
 
 
 def find_images(path: Path) -> list:
@@ -114,17 +190,39 @@ def parse_capture(image_path: Path) -> dict:
     return meta
 
 
-def render_with_offset(meta: dict, offset_x: float, offset_y: float, offset_z: float, 
+def render_with_offset(meta: dict, offset_x: float, offset_y: float, offset_z: float,
+                       rot_x: float, rot_y: float, rot_z: float,
                        viewer: pygcode_viewer.GCodeViewer, temp_path: Path) -> np.ndarray:
-    """Render GCode with given offset and return as numpy array."""
+    """Render GCode with given offset and rotation, return as numpy array.
+    
+    Args:
+        meta: Image metadata dict with nozzle position
+        offset_x, offset_y, offset_z: Camera position offsets in mm
+        rot_x, rot_y, rot_z: Camera rotation angles in degrees (pitch, yaw, roll)
+        viewer: GCodeViewer instance
+        temp_path: Path to save temporary render
+        
+    Returns:
+        Rendered image as numpy array
+    """
     camera_x = meta['nozzle_x'] + offset_x
     camera_y = meta['nozzle_y'] + offset_y
     camera_z = meta['nozzle_z'] + offset_z
     
+    # Compute rotated camera orientation
+    look_dir, up_vec = compute_camera_orientation(rot_x, rot_y, rot_z)
+    
+    # Target is camera position + look direction (scaled to reach Z=0 plane approximately)
+    # For a camera at height camera_z looking mostly down, scale to reach bed
+    target_dist = camera_z if abs(look_dir[2]) > 0.1 else 100.0
+    target_x = camera_x + look_dir[0] * target_dist
+    target_y = camera_y + look_dir[1] * target_dist
+    target_z = camera_z + look_dir[2] * target_dist
+    
     viewer.set_camera(
         pos=(camera_x, camera_y, camera_z),
-        target=(camera_x, camera_y + 0.001, 0.0),
-        up=(0.0, 1.0, 0.0),
+        target=(target_x, target_y, target_z),
+        up=(float(up_vec[0]), float(up_vec[1]), float(up_vec[2])),
     )
     
     viewer.render_to_file(str(temp_path), require_intrinsics=True)
@@ -186,6 +284,9 @@ def main():
     offset_x = INITIAL_OFFSET_X
     offset_y = INITIAL_OFFSET_Y
     offset_z = INITIAL_OFFSET_Z
+    rot_x = INITIAL_ROT_X  # Pitch
+    rot_y = INITIAL_ROT_Y  # Yaw
+    rot_z = INITIAL_ROT_Z  # Roll
     
     # Viewer cache (reuse if same gcode)
     viewer_cache = {}
@@ -199,11 +300,10 @@ def main():
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     
     print("\nControls:")
-    print("  WASD/Arrows: X/Y offset (+/- 1mm)")
-    print("  +/-: Z offset (+/- 1mm)")
-    print("  N/Space: Next image  |  P/Backspace: Previous image")
-    print("  R: Reset  |  S: Save/Print  |  Q/ESC: Quit")
-    print("-" * 50)
+    print("  Position: WASD/Arrows=X/Y  +/-=Z  (1mm steps)")
+    print("  Rotation: Z/C=Roll  T/G=Pitch  F/H=Yaw  (0.5° steps)")
+    print("  Nav: N/Space=Next  P/Back=Prev  R=Reset  S=Save  Q=Quit")
+    print("-" * 60)
     
     needs_reload = True
     needs_render = True
@@ -242,8 +342,8 @@ def main():
         
         # Render if needed
         if needs_render and meta is not None:
-            print(f"  Rendering... X={offset_x:+.1f} Y={offset_y:+.1f} Z={offset_z:+.1f}", end="\r")
-            render = render_with_offset(meta, offset_x, offset_y, offset_z, viewer, temp_path)
+            print(f"  Rendering... Pos=({offset_x:+.1f},{offset_y:+.1f},{offset_z:+.1f}) Rot=({rot_x:+.1f},{rot_y:+.1f},{rot_z:+.1f})", end="\r")
+            render = render_with_offset(meta, offset_x, offset_y, offset_z, rot_x, rot_y, rot_z, viewer, temp_path)
             if render is None:
                 print("  Error: Render failed")
                 continue
@@ -265,15 +365,20 @@ def main():
         cv2.putText(overlay, idx_text, (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 2.5, (0, 0, 0), 6)
         cv2.putText(overlay, idx_text, (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 2.5, (255, 255, 0), 3)
         
-        # Draw offset info
-        offset_text = f"X:{offset_x:+.1f}  Y:{offset_y:+.1f}  Z:{offset_z:+.1f}"
-        cv2.putText(overlay, offset_text, (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 2.5, (0, 0, 0), 6)
-        cv2.putText(overlay, offset_text, (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 2.5, (0, 255, 255), 3)
+        # Draw position offset info
+        pos_text = f"Pos: X:{offset_x:+.1f}  Y:{offset_y:+.1f}  Z:{offset_z:+.1f}"
+        cv2.putText(overlay, pos_text, (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 0), 5)
+        cv2.putText(overlay, pos_text, (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 255, 255), 2)
+        
+        # Draw rotation info
+        rot_text = f"Rot: P:{rot_x:+.1f}  Y:{rot_y:+.1f}  R:{rot_z:+.1f}"
+        cv2.putText(overlay, rot_text, (40, 230), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 0), 5)
+        cv2.putText(overlay, rot_text, (40, 230), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 200, 0), 2)
         
         # Draw help
-        help_text = "WASD:X/Y  +/-:Z  N/P:Next/Prev  R:Reset  S:Save  Q:Quit"
-        cv2.putText(overlay, help_text, (40, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 4)
-        cv2.putText(overlay, help_text, (40, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (200, 200, 200), 2)
+        help_text = "Pos:WASD/+/-  Rot:ZC/TG/FH  Nav:NP  R:Reset  S:Save  Q:Quit"
+        cv2.putText(overlay, help_text, (40, 300), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 4)
+        cv2.putText(overlay, help_text, (40, 300), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (200, 200, 200), 2)
         
         # Show scaled
         display = cv2.resize(overlay, (display_w, display_h))
@@ -281,7 +386,8 @@ def main():
         
         # Wait for key
         key = cv2.waitKey(100) & 0xFF
-        step = 1.0
+        step = 1.0      # Position step in mm
+        rot_step = 0.5  # Rotation step in degrees
         
         if key == 255:  # No key
             continue
@@ -308,17 +414,27 @@ def main():
             offset_x = INITIAL_OFFSET_X
             offset_y = INITIAL_OFFSET_Y
             offset_z = INITIAL_OFFSET_Z
+            rot_x = INITIAL_ROT_X
+            rot_y = INITIAL_ROT_Y
+            rot_z = INITIAL_ROT_Z
             needs_render = True
-            print(f"\nReset to: X={offset_x:+.1f} Y={offset_y:+.1f} Z={offset_z:+.1f}")
+            print(f"\nReset to: Pos=({offset_x:+.1f},{offset_y:+.1f},{offset_z:+.1f}) Rot=({rot_x:+.1f},{rot_y:+.1f},{rot_z:+.1f})")
         
         # Save
         elif key == ord('s') or key == ord('S'):
-            print(f"\n" + "=" * 50)
-            print("Copy these values to visualize_benchy.py:")
+            print(f"\n" + "=" * 60)
+            print("Camera Calibration Values:")
+            print("-" * 60)
+            print("# Position offsets (mm)")
             print(f"CAMERA_OFFSET_X = {offset_x:.1f}")
             print(f"CAMERA_OFFSET_Y = {offset_y:.1f}")
             print(f"CAMERA_OFFSET_Z = {offset_z:.1f}")
-            print("=" * 50)
+            print()
+            print("# Rotation offsets (degrees)")
+            print(f"CAMERA_ROT_X = {rot_x:.1f}  # Pitch")
+            print(f"CAMERA_ROT_Y = {rot_y:.1f}  # Yaw")
+            print(f"CAMERA_ROT_Z = {rot_z:.1f}  # Roll")
+            print("=" * 60)
         
         # Z up
         elif key == ord('+') or key == ord('='):
@@ -358,7 +474,7 @@ def main():
             offset_y += step
             needs_render = True
         
-        # WASD
+        # WASD for position
         elif key == ord('a') or key == ord('A'):
             offset_x -= step
             needs_render = True
@@ -371,6 +487,30 @@ def main():
         elif key == ord('x') or key == ord('X'):
             offset_y += step
             needs_render = True
+        
+        # Rotation controls: Z/C for Roll (rotation around Z axis - in image plane)
+        elif key == ord('z'):
+            rot_z -= rot_step
+            needs_render = True
+        elif key == ord('c'):
+            rot_z += rot_step
+            needs_render = True
+        
+        # T/G for Pitch (rotation around X axis - tilt forward/back)
+        elif key == ord('t'):
+            rot_x -= rot_step
+            needs_render = True
+        elif key == ord('g'):
+            rot_x += rot_step
+            needs_render = True
+        
+        # F/H for Yaw (rotation around Y axis - pan left/right)
+        elif key == ord('f'):
+            rot_y -= rot_step
+            needs_render = True
+        elif key == ord('h'):
+            rot_y += rot_step
+            needs_render = True
     
     cv2.destroyAllWindows()
     
@@ -382,9 +522,14 @@ def main():
         pass
     
     print("\nFinal values:")
+    print(f"  # Position offsets (mm)")
     print(f"  CAMERA_OFFSET_X = {offset_x:.1f}")
     print(f"  CAMERA_OFFSET_Y = {offset_y:.1f}")
     print(f"  CAMERA_OFFSET_Z = {offset_z:.1f}")
+    print(f"  # Rotation offsets (degrees)")
+    print(f"  CAMERA_ROT_X = {rot_x:.1f}  # Pitch")
+    print(f"  CAMERA_ROT_Y = {rot_y:.1f}  # Yaw")
+    print(f"  CAMERA_ROT_Z = {rot_z:.1f}  # Roll")
     
     return 0
 
